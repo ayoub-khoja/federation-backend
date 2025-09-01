@@ -7,6 +7,8 @@ python-decouple==3.8
 psycopg2-binary==2.9.9
 gunicorn==21.2.0
 setuptools>=68.0.0
+requests>=2.31.0
+pywebpush>=1.15.0
 
 
 
