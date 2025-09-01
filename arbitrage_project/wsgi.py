@@ -11,7 +11,11 @@ import os
 
 from django.core.wsgi import get_wsgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'arbitrage_project.settings')
+# Utiliser les settings de production si l'environnement est configuré
+if os.environ.get('DJANGO_ENV') == 'production':
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'arbitrage_project.settings_production')
+else:
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'arbitrage_project.settings')
 
 application = get_wsgi_application()
 
