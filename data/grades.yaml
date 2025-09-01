@@ -1,0 +1,36 @@
+grades:
+  - nom: "Candidat"
+    code: "candidat"
+    description: "Grade de débutant pour les nouveaux arbitres"
+    niveau: 1
+    ordre: 1
+    is_active: true
+  
+  - nom: "3ème Série"
+    code: "3eme_serie"
+    description: "Troisième série d'arbitrage"
+    niveau: 2
+    ordre: 2
+    is_active: true
+  
+  - nom: "2ème Série"
+    code: "2eme_serie"
+    description: "Deuxième série d'arbitrage"
+    niveau: 3
+    ordre: 3
+    is_active: true
+  
+  - nom: "1ère Série"
+    code: "1ere_serie"
+    description: "Première série d'arbitrage"
+    niveau: 4
+    ordre: 4
+    is_active: true
+  
+  - nom: "Fédérale"
+    code: "federale"
+    description: "Grade fédéral d'arbitrage"
+    niveau: 5
+    ordre: 5
+    is_active: true
+

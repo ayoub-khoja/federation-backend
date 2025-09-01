@@ -1,0 +1,74 @@
+ligues_tunisiennes:
+  - code: "tunis"
+    nom: "Ligue de Tunis"
+    region: "Grand Tunis"
+    active: true
+    ordre: 1
+    
+  - code: "nabeul"
+    nom: "Ligue de Nabeul"
+    region: "Cap Bon"
+    active: true
+    ordre: 2
+    
+  - code: "sousse"
+    nom: "Ligue de Sousse"
+    region: "Sahel"
+    active: true
+    ordre: 3
+    
+  - code: "monastir"
+    nom: "Ligue de Monastir"
+    region: "Sahel"
+    active: true
+    ordre: 4
+    
+  - code: "sfax"
+    nom: "Ligue de Sfax"
+    region: "Centre"
+    active: true
+    ordre: 5
+    
+  - code: "gabes"
+    nom: "Ligue de Gabès"
+    region: "Sud"
+    active: true
+    ordre: 6
+    
+  - code: "bizerte"
+    nom: "Ligue de Bizerte"
+    region: "Nord"
+    active: true
+    ordre: 7
+    
+  - code: "kef"
+    nom: "Ligue du Kef"
+    region: "Nord-Ouest"
+    active: true
+    ordre: 8
+    
+  - code: "kairouan"
+    nom: "Ligue de Kairouan"
+    region: "Centre"
+    active: true
+    ordre: 9
+    
+  - code: "sidi_bouzid"
+    nom: "Ligue de Sidi Bouzid"
+    region: "Centre-Ouest"
+    active: true
+    ordre: 10
+    
+  - code: "gafsa"
+    nom: "Ligue de Gafsa"
+    region: "Sud-Ouest"
+    active: true
+    ordre: 11
+    
+  - code: "medenine"
+    nom: "Ligue de Médenine"
+    region: "Sud-Est"
+    active: true
+    ordre: 12
+
+
