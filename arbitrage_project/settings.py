@@ -69,24 +69,29 @@ TEMPLATES = [
 WSGI_APPLICATION = 'arbitrage_project.wsgi.application'
 
 # Database
+# Configuration PostgreSQL (commentée temporairement pour le développement local)
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'federation_lookwashmy',
+#         'USER': 'federation_lookwashmy',
+#         'PASSWORD': 'e4da5358b37630b0bffebc73307975b96139252b',
+#         'HOST': 'a3ch9u.h.filess.io',
+#         'PORT': '61007',
+#         'OPTIONS': {
+#             'sslmode': 'disable',
+#             'client_encoding': 'UTF8',
+#         },
+#     }
+# }
+
+# Configuration SQLite pour le développement local
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-
-# Pour PostgreSQL (optionnel)
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': 'arbitrage_db',
-#         'USER': 'postgres',
-#         'PASSWORD': 'your_password',
-#         'HOST': 'localhost',
-#         'PORT': '5432',
-#     }
-# }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

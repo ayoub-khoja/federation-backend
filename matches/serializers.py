@@ -2,8 +2,22 @@
 Serializers pour l'API des matchs
 """
 from rest_framework import serializers
-from .models import Match, MatchEvent
+from .models import Match, MatchEvent, TypeMatch, Categorie
 from .models import Designation
+
+class TypeMatchSerializer(serializers.ModelSerializer):
+    """Serializer pour les types de match"""
+    
+    class Meta:
+        model = TypeMatch
+        fields = ['id', 'nom', 'code', 'description', 'is_active', 'ordre']
+
+class CategorieSerializer(serializers.ModelSerializer):
+    """Serializer pour les catégories"""
+    
+    class Meta:
+        model = Categorie
+        fields = ['id', 'nom', 'code', 'age_min', 'age_max', 'description', 'is_active', 'ordre']
 
 class MatchEventSerializer(serializers.ModelSerializer):
     """Serializer pour les événements de match"""
@@ -19,6 +33,8 @@ class MatchSerializer(serializers.ModelSerializer):
     """Serializer pour les matchs"""
     events = MatchEventSerializer(many=True, read_only=True)
     referee_name = serializers.CharField(source='referee.get_full_name', read_only=True)
+    type_match_info = TypeMatchSerializer(source='type_match', read_only=True)
+    categorie_info = CategorieSerializer(source='categorie', read_only=True)
     score_display = serializers.ReadOnlyField()
     has_score = serializers.ReadOnlyField()
     is_completed = serializers.ReadOnlyField()
@@ -26,9 +42,9 @@ class MatchSerializer(serializers.ModelSerializer):
     class Meta:
         model = Match
         fields = [
-            'id', 'match_type', 'category', 'stadium', 'match_date', 
-            'match_time', 'home_team', 'away_team', 'home_score', 
-            'away_score', 'description', 'match_sheet', 'referee',
+            'id', 'type_match', 'categorie', 'type_match_info', 'categorie_info',
+            'stadium', 'match_date', 'match_time', 'home_team', 'away_team', 
+            'home_score', 'away_score', 'role', 'description', 'match_sheet', 'referee',
             'referee_name', 'status', 'created_at', 'updated_at',
             'match_report', 'incidents', 'events', 'score_display',
             'has_score', 'is_completed'
@@ -46,9 +62,9 @@ class MatchCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Match
         fields = [
-            'match_type', 'category', 'stadium', 'match_date',
-            'match_time', 'home_team', 'away_team', 'description',
-            'match_sheet'
+            'type_match', 'categorie', 'stadium', 'match_date',
+            'match_time', 'home_team', 'away_team', 'home_score', 'away_score',
+            'role', 'description', 'match_sheet'
         ]
     
     def create(self, validated_data):
@@ -62,22 +78,30 @@ class MatchUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Match
         fields = [
-            'match_type', 'category', 'stadium', 'match_date',
+            'type_match', 'categorie', 'stadium', 'match_date',
             'match_time', 'home_team', 'away_team', 'home_score',
-            'away_score', 'description', 'match_sheet', 'status',
+            'away_score', 'role', 'description', 'match_sheet', 'status',
             'match_report', 'incidents'
         ]
 
 class MatchListSerializer(serializers.ModelSerializer):
     """Serializer simplifié pour la liste des matchs"""
     referee_name = serializers.CharField(source='referee.get_full_name', read_only=True)
+    type_match_nom = serializers.SerializerMethodField()
+    categorie_nom = serializers.SerializerMethodField()
     score_display = serializers.ReadOnlyField()
+    
+    def get_type_match_nom(self, obj):
+        return obj.type_match.nom if obj.type_match else "Type non défini"
+    
+    def get_categorie_nom(self, obj):
+        return obj.categorie.nom if obj.categorie else "Catégorie non définie"
     
     class Meta:
         model = Match
         fields = [
-            'id', 'match_type', 'category', 'stadium', 'match_date',
-            'match_time', 'home_team', 'away_team', 'score_display',
+            'id', 'type_match_nom', 'categorie_nom', 'stadium', 'match_date',
+            'match_time', 'home_team', 'away_team', 'score_display', 'role',
             'referee_name', 'status'
         ]
 

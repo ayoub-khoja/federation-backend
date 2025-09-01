@@ -5,28 +5,46 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 
+class TypeMatch(models.Model):
+    """Modèle pour les types de match"""
+    
+    nom = models.CharField(max_length=100, verbose_name="Nom du type de match")
+    code = models.CharField(max_length=20, unique=True, verbose_name="Code")
+    description = models.TextField(blank=True, verbose_name="Description")
+    is_active = models.BooleanField(default=True, verbose_name="Actif")
+    ordre = models.IntegerField(default=0, verbose_name="Ordre d'affichage")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Créé le")
+    
+    class Meta:
+        verbose_name = "Type de match"
+        verbose_name_plural = "Types de match"
+        ordering = ['ordre', 'nom']
+    
+    def __str__(self):
+        return self.nom
+
+class Categorie(models.Model):
+    """Modèle pour les catégories de match"""
+    
+    nom = models.CharField(max_length=50, verbose_name="Nom de la catégorie")
+    code = models.CharField(max_length=10, unique=True, verbose_name="Code")
+    age_min = models.IntegerField(null=True, blank=True, verbose_name="Âge minimum")
+    age_max = models.IntegerField(null=True, blank=True, verbose_name="Âge maximum")
+    description = models.TextField(blank=True, verbose_name="Description")
+    is_active = models.BooleanField(default=True, verbose_name="Actif")
+    ordre = models.IntegerField(default=0, verbose_name="Ordre d'affichage")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Créé le")
+    
+    class Meta:
+        verbose_name = "Catégorie"
+        verbose_name_plural = "Catégories"
+        ordering = ['ordre', 'nom']
+    
+    def __str__(self):
+        return self.nom
+
 class Match(models.Model):
     """Modèle pour représenter un match"""
-    
-    # Types de matchs
-    MATCH_TYPE_CHOICES = [
-        ('ligue1', 'Ligue 1 Professionnelle'),
-        ('ligue2', 'Ligue 2 Professionnelle'),
-        ('c1', 'Coupe de Tunisie'),
-        ('c2', 'Coupe de la Ligue'),
-        ('youth', 'Championnat Jeunes'),
-        ('regional', 'Championnat Régional'),
-    ]
-    
-    # Catégories
-    CATEGORY_CHOICES = [
-        ('senior', 'Seniors'),
-        ('u21', 'U21'),
-        ('junior', 'Juniors'),
-        ('cadets', 'Cadets'),
-        ('minimes', 'Minimes'),
-        ('school', 'Scolaires'),
-    ]
     
     # Statuts du match
     STATUS_CHOICES = [
@@ -38,15 +56,19 @@ class Match(models.Model):
     ]
     
     # Informations de base
-    match_type = models.CharField(
-        max_length=20,
-        choices=MATCH_TYPE_CHOICES,
-        verbose_name="Type de match"
+    type_match = models.ForeignKey(
+        TypeMatch,
+        on_delete=models.CASCADE,
+        verbose_name="Type de match",
+        null=True,
+        blank=True
     )
-    category = models.CharField(
-        max_length=20,
-        choices=CATEGORY_CHOICES,
-        verbose_name="Catégorie"
+    categorie = models.ForeignKey(
+        Categorie,
+        on_delete=models.CASCADE,
+        verbose_name="Catégorie",
+        null=True,
+        blank=True
     )
     
     # Lieu et date
@@ -68,6 +90,23 @@ class Match(models.Model):
         null=True,
         blank=True,
         verbose_name="Score visiteur"
+    )
+    
+    # Rôle de l'arbitre dans ce match
+    ROLE_CHOICES = [
+        ('arbitre_principal', 'Arbitre Principal'),
+        ('arbitre_assistant1', '1er Arbitre Assistant'),
+        ('arbitre_assistant2', '2ème Arbitre Assistant'),
+        ('quatrieme_arbitre', '4ème Arbitre'),
+        ('arbitre_video', 'Arbitre VAR'),
+        ('arbitre_assistant_video', 'Assistant VAR'),
+    ]
+    
+    role = models.CharField(
+        max_length=30,
+        choices=ROLE_CHOICES,
+        default='arbitre_principal',
+        verbose_name="Rôle de l'arbitre"
     )
     
     # Description
@@ -122,7 +161,9 @@ class Match(models.Model):
         ordering = ['-match_date', '-match_time']
         
     def __str__(self):
-        return f"{self.home_team} vs {self.away_team} - {self.match_date}"
+        type_name = self.type_match.nom if self.type_match else "Type non défini"
+        categorie_name = self.categorie.nom if self.categorie else "Catégorie non définie"
+        return f"{self.home_team} vs {self.away_team} - {self.match_date} ({type_name} - {categorie_name})"
     
     @property
     def is_completed(self):

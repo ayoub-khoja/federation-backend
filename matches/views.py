@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 from datetime import datetime, timedelta
 
-from .models import Match, MatchEvent, Designation
+from .models import Match, MatchEvent, Designation, TypeMatch, Categorie
 from .serializers import (
     MatchSerializer,
     MatchCreateSerializer,
@@ -17,7 +17,9 @@ from .serializers import (
     DesignationSerializer,
     DesignationCreateSerializer,
     DesignationUpdateSerializer,
-    DesignationListSerializer
+    DesignationListSerializer,
+    TypeMatchSerializer,
+    CategorieSerializer
 )
 
 class MatchListCreateView(generics.ListCreateAPIView):
@@ -27,11 +29,22 @@ class MatchListCreateView(generics.ListCreateAPIView):
     def get_serializer_class(self):
         if self.request.method == 'POST':
             return MatchCreateSerializer
-        return MatchListSerializer
+        return MatchSerializer
     
     def get_queryset(self):
         """Retourne les matchs de l'arbitre connecté"""
-        return Match.objects.filter(referee=self.request.user)
+        return Match.objects.filter(referee=self.request.user).select_related('type_match', 'categorie', 'referee')
+    
+    def list(self, request, *args, **kwargs):
+        """Lister les matchs de l'arbitre connecté avec toutes les données"""
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        
+        return Response({
+            'success': True,
+            'message': f'{queryset.count()} match(s) trouvé(s)',
+            'matches': serializer.data
+        })
     
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -56,12 +69,23 @@ class MatchDetailView(generics.RetrieveUpdateDestroyAPIView):
     
     def get_queryset(self):
         """Seuls les matchs de l'arbitre connecté"""
-        return Match.objects.filter(referee=self.request.user)
+        return Match.objects.filter(referee=self.request.user).select_related('type_match', 'categorie', 'referee')
     
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
             return MatchUpdateSerializer
         return MatchSerializer
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Récupérer un match spécifique avec toutes les données"""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        
+        return Response({
+            'success': True,
+            'message': 'Match récupéré avec succès',
+            'match': serializer.data
+        })
 
 @api_view(['GET'])
 def match_statistics(request):
@@ -349,6 +373,45 @@ def my_designations(request):
     return Response({
         'success': True,
         'designations': DesignationListSerializer(designations, many=True).data
+    })
+
+# ===== VUES POUR LES TYPES DE MATCH ET CATÉGORIES =====
+
+@api_view(['GET'])
+def match_types(request):
+    """Récupérer tous les types de match actifs"""
+    types = TypeMatch.objects.filter(is_active=True).order_by('ordre', 'nom')
+    
+    return Response({
+        'success': True,
+        'types': TypeMatchSerializer(types, many=True).data
+    })
+
+@api_view(['GET'])
+def categories(request):
+    """Récupérer toutes les catégories actives"""
+    categories = Categorie.objects.filter(is_active=True).order_by('ordre', 'nom')
+    
+    return Response({
+        'success': True,
+        'categories': CategorieSerializer(categories, many=True).data
+    })
+
+@api_view(['GET'])
+def match_roles(request):
+    """Récupérer tous les rôles d'arbitrage disponibles"""
+    from .models import Match
+    
+    roles = []
+    for choice in Match.ROLE_CHOICES:
+        roles.append({
+            'value': choice[0],
+            'label': choice[1]
+        })
+    
+    return Response({
+        'success': True,
+        'roles': roles
     })
 
 

@@ -24,6 +24,11 @@ urlpatterns = [
     path('designations/<int:designation_id>/decline/', views.decline_designation, name='decline_designation'),
     path('designations/statistics/', views.designation_statistics, name='designation_statistics'),
     path('designations/my/', views.my_designations, name='my_designations'),
+    
+    # ===== TYPES DE MATCH ET CATÉGORIES =====
+    path('types/', views.match_types, name='match_types'),
+    path('categories/', views.categories, name='categories'),
+    path('roles/', views.match_roles, name='match_roles'),
 ]
 
 

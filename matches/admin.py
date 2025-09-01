@@ -3,7 +3,27 @@ Configuration de l'interface d'administration pour les matchs
 """
 from django.contrib import admin
 from django.contrib import messages
-from .models import Match, MatchEvent, Designation
+from .models import Match, MatchEvent, Designation, TypeMatch, Categorie
+
+@admin.register(TypeMatch)
+class TypeMatchAdmin(admin.ModelAdmin):
+    """Interface d'administration pour les types de match"""
+    
+    list_display = ['nom', 'code', 'is_active', 'ordre', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['nom', 'code', 'description']
+    ordering = ['ordre', 'nom']
+    list_editable = ['is_active', 'ordre']
+
+@admin.register(Categorie)
+class CategorieAdmin(admin.ModelAdmin):
+    """Interface d'administration pour les catégories"""
+    
+    list_display = ['nom', 'code', 'age_min', 'age_max', 'is_active', 'ordre', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['nom', 'code', 'description']
+    ordering = ['ordre', 'nom']
+    list_editable = ['is_active', 'ordre']
 
 @admin.register(Match)
 class MatchAdmin(admin.ModelAdmin):
@@ -11,10 +31,10 @@ class MatchAdmin(admin.ModelAdmin):
     
     list_display = [
         'match_date', 'match_time', 'home_team', 'away_team',
-        'stadium', 'referee', 'status', 'score_display'
+        'stadium', 'referee', 'role', 'status', 'score_display'
     ]
     list_filter = [
-        'match_type', 'category', 'status', 'match_date'
+        'type_match', 'categorie', 'role', 'status', 'match_date'
     ]
     search_fields = [
         'home_team', 'away_team', 'stadium', 'referee__first_name', 
@@ -25,7 +45,7 @@ class MatchAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Informations du match', {
-            'fields': ('match_type', 'category', 'stadium', 'match_date', 'match_time')
+            'fields': ('type_match', 'categorie', 'stadium', 'match_date', 'match_time')
         }),
         ('Équipes', {
             'fields': ('home_team', 'away_team')
@@ -35,7 +55,7 @@ class MatchAdmin(admin.ModelAdmin):
             'classes': ['collapse']
         }),
         ('Arbitrage', {
-            'fields': ('referee',)
+            'fields': ('referee', 'role')
         }),
         ('Documents et rapports', {
             'fields': ('description', 'match_sheet', 'match_report', 'incidents'),

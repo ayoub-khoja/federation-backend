@@ -46,3 +46,5 @@ NOTIFICATION_CONFIG = {
     'mobile_frontend': 'https://federation-mobile-front.vercel.app',
     'backend_api': 'https://federation-backend.onrender.com/api',
 }
+
+
