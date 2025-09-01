@@ -31,7 +31,8 @@ DATABASES = {
 # CORS Configuration pour la production
 CORS_ALLOWED_ORIGINS = [
     "https://federation-backend.onrender.com",
-    "https://your-frontend-domain.com",  # Remplacez par votre domaine frontend
+    "https://federation-admin-front.vercel.app",
+    "https://federation-mobile-front.vercel.app",
 ]
 
 # Désactiver CORS_ALLOW_ALL_ORIGINS en production

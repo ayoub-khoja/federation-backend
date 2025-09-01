@@ -157,14 +157,19 @@ SIMPLE_JWT = {
 }
 
 # CORS Configuration
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:3001",
-    "http://127.0.0.1:3001",
-    "http://192.168.1.101:3000",  # Accès depuis mobile sur le même réseau
-    "http://192.168.1.101:3001",  # Accès depuis mobile sur le même réseau
-]
+try:
+    from frontend_config import CORS_ALLOWED_ORIGINS
+except ImportError:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://192.168.1.101:3000",
+        "http://192.168.1.101:3001",
+        "https://federation-admin-front.vercel.app",
+        "https://federation-mobile-front.vercel.app",
+    ]
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = True  # Temporairement pour les tests

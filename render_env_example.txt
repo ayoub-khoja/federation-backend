@@ -31,4 +31,5 @@ VAPID_EMAIL=admin@arbitrage.tn
 # ============================================================================
 # CORS (Frontend)
 # ============================================================================
-FRONTEND_URL=https://votre-domaine-frontend.com
+FRONTEND_URL=https://federation-admin-front.vercel.app
+MOBILE_FRONTEND_URL=https://federation-mobile-front.vercel.app
