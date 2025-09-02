@@ -36,7 +36,7 @@ class UnifiedLoginSerializer(serializers.Serializer):
             raise serializers.ValidationError("Numéro de téléphone ou mot de passe incorrect.")
     
     def _clean_phone_number(self, phone_number):
-        """Nettoie et formate le numéro de téléphone"""
+        """Nettoie et formate le numéro de téléphone au format +216........"""
         # Supprimer les espaces et caractères spéciaux
         cleaned = ''.join(filter(str.isdigit, phone_number))
         
@@ -47,8 +47,10 @@ class UnifiedLoginSerializer(serializers.Serializer):
             return '+' + cleaned
         elif len(cleaned) == 11 and cleaned.startswith('216'):
             return '+' + cleaned
-        elif len(cleaned) == 12 and cleaned.startswith('+216'):
-            return cleaned
+        elif len(cleaned) == 12 and cleaned.startswith('216'):
+            return '+' + cleaned
+        elif phone_number.startswith('+216'):
+            return phone_number
         else:
             return phone_number  # Retourner tel quel si format non reconnu
     
@@ -158,7 +160,7 @@ class ArbitreRegistrationSerializer(serializers.ModelSerializer):
         return data
     
     def _clean_phone_number(self, phone_number):
-        """Nettoie et formate le numéro de téléphone"""
+        """Nettoie et formate le numéro de téléphone au format +216........"""
         # Supprimer les espaces et caractères spéciaux
         cleaned = ''.join(filter(str.isdigit, phone_number))
         
@@ -169,8 +171,10 @@ class ArbitreRegistrationSerializer(serializers.ModelSerializer):
             return '+' + cleaned
         elif len(cleaned) == 11 and cleaned.startswith('216'):
             return '+' + cleaned
-        elif len(cleaned) == 12 and cleaned.startswith('+216'):
-            return cleaned
+        elif len(cleaned) == 12 and cleaned.startswith('216'):
+            return '+' + cleaned
+        elif phone_number.startswith('+216'):
+            return phone_number
         else:
             return phone_number  # Retourner tel quel si format non reconnu
     
@@ -197,22 +201,25 @@ class ArbitreRegistrationSerializer(serializers.ModelSerializer):
         return arbitre
     
     def _normalize_phone_number(self, phone_number):
-        """Normalise un numéro de téléphone tunisien"""
+        """Normalise un numéro de téléphone tunisien au format +216........"""
         # Supprimer tous les espaces et caractères spéciaux
         phone = ''.join(filter(str.isdigit, phone_number))
         
-        # Si le numéro commence par 216, le garder tel quel
+        # Si le numéro commence par 216, ajouter le +
         if phone.startswith('216'):
-            return phone
-        # Si le numéro commence par 0, remplacer par 216
+            return '+' + phone
+        # Si le numéro commence par 0, remplacer par +216
         elif phone.startswith('0'):
-            return '216' + phone[1:]
-        # Si le numéro a 8 chiffres, ajouter 216
+            return '+216' + phone[1:]
+        # Si le numéro a 8 chiffres, ajouter +216
         elif len(phone) == 8:
-            return '216' + phone
+            return '+216' + phone
+        # Si le numéro a déjà le format +216, le garder
+        elif phone_number.startswith('+216'):
+            return phone_number
         # Sinon, retourner tel quel
         else:
-            return phone
+            return phone_number
 
 class ArbitreLoginSerializer(serializers.Serializer):
     """Serializer pour la connexion des arbitres"""
@@ -333,22 +340,25 @@ class CommissaireRegistrationSerializer(serializers.ModelSerializer):
         return commissaire
     
     def _normalize_phone_number(self, phone_number):
-        """Normalise un numéro de téléphone tunisien"""
+        """Normalise un numéro de téléphone tunisien au format +216........"""
         # Supprimer tous les espaces et caractères spéciaux
         phone = ''.join(filter(str.isdigit, phone_number))
         
-        # Si le numéro commence par 216, le garder tel quel
+        # Si le numéro commence par 216, ajouter le +
         if phone.startswith('216'):
-            return phone
-        # Si le numéro commence par 0, remplacer par 216
+            return '+' + phone
+        # Si le numéro commence par 0, remplacer par +216
         elif phone.startswith('0'):
-            return '216' + phone[1:]
-        # Si le numéro a 8 chiffres, ajouter 216
+            return '+216' + phone[1:]
+        # Si le numéro a 8 chiffres, ajouter +216
         elif len(phone) == 8:
-            return '216' + phone
+            return '+216' + phone
+        # Si le numéro a déjà le format +216, le garder
+        elif phone_number.startswith('+216'):
+            return phone_number
         # Sinon, retourner tel quel
         else:
-            return phone
+            return phone_number
 
 class CommissaireLoginSerializer(serializers.Serializer):
     """Serializer pour la connexion des commissaires"""
@@ -447,22 +457,25 @@ class AdminRegistrationSerializer(serializers.ModelSerializer):
         return admin
     
     def _normalize_phone_number(self, phone_number):
-        """Normalise un numéro de téléphone tunisien"""
+        """Normalise un numéro de téléphone tunisien au format +216........"""
         # Supprimer tous les espaces et caractères spéciaux
         phone = ''.join(filter(str.isdigit, phone_number))
         
-        # Si le numéro commence par 216, le garder tel quel
+        # Si le numéro commence par 216, ajouter le +
         if phone.startswith('216'):
-            return phone
-        # Si le numéro commence par 0, remplacer par 216
+            return '+' + phone
+        # Si le numéro commence par 0, remplacer par +216
         elif phone.startswith('0'):
-            return '216' + phone[1:]
-        # Si le numéro a 8 chiffres, ajouter 216
+            return '+216' + phone[1:]
+        # Si le numéro a 8 chiffres, ajouter +216
         elif len(phone) == 8:
-            return '216' + phone
+            return '+216' + phone
+        # Si le numéro a déjà le format +216, le garder
+        elif phone_number.startswith('+216'):
+            return phone_number
         # Sinon, retourner tel quel
         else:
-            return phone
+            return phone_number
 
 class AdminLoginSerializer(serializers.Serializer):
     """Serializer pour la connexion des administrateurs"""

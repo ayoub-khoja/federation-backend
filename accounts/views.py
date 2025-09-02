@@ -30,23 +30,26 @@ from django.utils import timezone
 
 def normalize_phone_number(phone_number):
     """
-    Normalise un numéro de téléphone tunisien
+    Normalise un numéro de téléphone tunisien au format +216........
     """
     # Supprimer tous les espaces et caractères spéciaux
     phone = ''.join(filter(str.isdigit, phone_number))
     
-    # Si le numéro commence par 216, le garder tel quel
+    # Si le numéro commence par 216, ajouter le +
     if phone.startswith('216'):
-        return phone
-    # Si le numéro commence par 0, remplacer par 216
+        return '+' + phone
+    # Si le numéro commence par 0, remplacer par +216
     elif phone.startswith('0'):
-        return '216' + phone[1:]
-    # Si le numéro a 8 chiffres, ajouter 216
+        return '+216' + phone[1:]
+    # Si le numéro a 8 chiffres, ajouter +216
     elif len(phone) == 8:
-        return '216' + phone
+        return '+216' + phone
+    # Si le numéro a déjà le format +216, le garder
+    elif phone_number.startswith('+216'):
+        return phone_number
     # Sinon, retourner tel quel
     else:
-        return phone
+        return phone_number
 
 def check_phone_number_exists(phone_number):
     """
