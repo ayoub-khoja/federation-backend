@@ -3,7 +3,7 @@ Serializers pour l'API des utilisateurs du système d'arbitrage
 """
 from rest_framework import serializers
 from django.contrib.auth import authenticate
-from .models import Arbitre, Commissaire, Admin, LigueArbitrage
+from .models import Arbitre, Commissaire, Admin, LigueArbitrage, ExcuseArbitre
 
 # ============================================================================
 # SÉRIALISEURS POUR L'AUTHENTIFICATION UNIFIÉE
@@ -268,14 +268,45 @@ class ArbitreProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'phone_number', 'date_joined', 'is_active', 'is_staff', 'is_superuser']
 
 class ArbitreUpdateSerializer(serializers.ModelSerializer):
-    """Serializer pour la mise à jour du profil arbitre"""
+    """Serializer pour la mise à jour du profil arbitre - tous les champs modifiables"""
     
     class Meta:
         model = Arbitre
         fields = [
             'email', 'first_name', 'last_name', 'address', 
-            'birth_date', 'birth_place', 'cin', 'profile_photo'
+            'birth_date', 'birth_place', 'cin', 'profile_photo',
+            'role', 'grade', 'ligue'
         ]
+        extra_kwargs = {
+            'email': {'required': False, 'allow_blank': True},
+            'address': {'required': False, 'allow_blank': True},
+            'birth_place': {'required': False, 'allow_blank': True},
+            'cin': {'required': False, 'allow_blank': True},
+            'profile_photo': {'required': False},
+            'birth_date': {'required': False},
+            'role': {'required': False},
+            'grade': {'required': False},
+            'ligue': {'required': False},
+        }
+    
+    def validate_ligue(self, value):
+        """Valider que la ligue existe et est active"""
+        if value and not value.is_active:
+            raise serializers.ValidationError("Cette ligue n'est pas active.")
+        return value
+    
+    def validate_cin(self, value):
+        """Valider l'unicité du CIN si fourni"""
+        if value:
+            # Vérifier l'unicité en excluant l'instance actuelle
+            if self.instance:
+                existing = Arbitre.objects.filter(cin=value).exclude(id=self.instance.id)
+            else:
+                existing = Arbitre.objects.filter(cin=value)
+            
+            if existing.exists():
+                raise serializers.ValidationError("Ce numéro CIN est déjà utilisé par un autre arbitre.")
+        return value
 
 # ============================================================================
 # SÉRIALISEURS POUR LES COMMISSAIRES
@@ -566,4 +597,179 @@ class LigueArbitrageSerializer(serializers.ModelSerializer):
     class Meta:
         model = LigueArbitrage
         fields = ['id', 'nom', 'description', 'is_active', 'date_creation', 'ordre']
+
+# ============================================================================
+# SÉRIALISEURS POUR LES EXCUSES D'ARBITRES
+# ============================================================================
+
+class ExcuseArbitreCreateSerializer(serializers.ModelSerializer):
+    """Serializer pour créer une excuse d'arbitre"""
+    
+    # Champs en lecture seule (pré-remplis)
+    arbitre_nom = serializers.CharField(source='arbitre.get_full_name', read_only=True)
+    arbitre_phone = serializers.CharField(source='arbitre.phone_number', read_only=True)
+    arbitre_grade = serializers.CharField(source='arbitre.get_grade_display', read_only=True)
+    arbitre_ligue = serializers.CharField(source='arbitre.ligue.nom', read_only=True)
+    
+    class Meta:
+        model = ExcuseArbitre
+        fields = [
+            'date_debut', 'date_fin', 'cause', 'piece_jointe',
+            'arbitre_nom', 'arbitre_phone', 'arbitre_grade', 'arbitre_ligue'
+        ]
+        extra_kwargs = {
+            'piece_jointe': {'required': False},
+        }
+    
+    def validate(self, data):
+        """Validation des données de l'excuse"""
+        date_debut = data.get('date_debut')
+        date_fin = data.get('date_fin')
+        
+        # Vérifier que la date de fin est après la date de début
+        if date_debut and date_fin:
+            if date_fin < date_debut:
+                raise serializers.ValidationError({
+                    'date_fin': 'La date de fin doit être postérieure à la date de début.'
+                })
+        
+        # Vérifier qu'il n'y a pas de chevauchement avec d'autres excuses
+        arbitre = self.context['request'].user
+        if date_debut and date_fin:
+            overlapping_excuses = ExcuseArbitre.objects.filter(
+                arbitre=arbitre,
+                status__in=['en_attente', 'acceptee'],
+                date_debut__lte=date_fin,
+                date_fin__gte=date_debut
+            ).exclude(id=self.instance.id if self.instance else None)
+            
+            if overlapping_excuses.exists():
+                raise serializers.ValidationError({
+                    'date_debut': 'Vous avez déjà une excuse en cours pour cette période.',
+                    'date_fin': 'Vous avez déjà une excuse en cours pour cette période.'
+                })
+        
+        return data
+    
+    def validate_date_debut(self, value):
+        """Validation de la date de début"""
+        from django.utils import timezone
+        today = timezone.now().date()
+        
+        # L'excuse ne peut pas être pour une date passée (sauf si c'est pour aujourd'hui)
+        if value < today:
+            raise serializers.ValidationError(
+                'La date de début ne peut pas être dans le passé.'
+            )
+        
+        return value
+    
+    def validate_cause(self, value):
+        """Validation de la cause"""
+        if len(value.strip()) < 10:
+            raise serializers.ValidationError(
+                'La cause de l\'excuse doit contenir au moins 10 caractères.'
+            )
+        return value.strip()
+
+class ExcuseArbitreListSerializer(serializers.ModelSerializer):
+    """Serializer pour lister les excuses d'un arbitre"""
+    
+    arbitre_nom = serializers.CharField(source='arbitre.get_full_name', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    duree = serializers.IntegerField(source='get_duree', read_only=True)
+    is_en_cours = serializers.BooleanField(read_only=True)
+    is_passee = serializers.BooleanField(read_only=True)
+    is_future = serializers.BooleanField(read_only=True)
+    can_be_modified = serializers.BooleanField(read_only=True)
+    can_be_cancelled = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = ExcuseArbitre
+        fields = [
+            'id', 'date_debut', 'date_fin', 'cause', 'piece_jointe',
+            'status', 'status_display', 'commentaire_admin',
+            'created_at', 'updated_at', 'traite_le',
+            'arbitre_nom', 'duree', 'is_en_cours', 'is_passee', 'is_future',
+            'can_be_modified', 'can_be_cancelled'
+        ]
+
+class ExcuseArbitreDetailSerializer(serializers.ModelSerializer):
+    """Serializer pour les détails d'une excuse"""
+    
+    arbitre_nom = serializers.CharField(source='arbitre.get_full_name', read_only=True)
+    arbitre_phone = serializers.CharField(source='arbitre.phone_number', read_only=True)
+    arbitre_grade = serializers.CharField(source='arbitre.get_grade_display', read_only=True)
+    arbitre_ligue = serializers.CharField(source='arbitre.ligue.nom', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    duree = serializers.IntegerField(source='get_duree', read_only=True)
+    is_en_cours = serializers.BooleanField(read_only=True)
+    is_passee = serializers.BooleanField(read_only=True)
+    is_future = serializers.BooleanField(read_only=True)
+    can_be_modified = serializers.BooleanField(read_only=True)
+    can_be_cancelled = serializers.BooleanField(read_only=True)
+    traite_par_nom = serializers.CharField(source='traite_par.get_full_name', read_only=True)
+    
+    class Meta:
+        model = ExcuseArbitre
+        fields = [
+            'id', 'date_debut', 'date_fin', 'cause', 'piece_jointe',
+            'status', 'status_display', 'commentaire_admin',
+            'created_at', 'updated_at', 'traite_le', 'traite_par_nom',
+            'arbitre_nom', 'arbitre_phone', 'arbitre_grade', 'arbitre_ligue',
+            'duree', 'is_en_cours', 'is_passee', 'is_future',
+            'can_be_modified', 'can_be_cancelled'
+        ]
+
+class ExcuseArbitreUpdateSerializer(serializers.ModelSerializer):
+    """Serializer pour mettre à jour une excuse (seulement si en attente)"""
+    
+    class Meta:
+        model = ExcuseArbitre
+        fields = ['date_debut', 'date_fin', 'cause', 'piece_jointe']
+        extra_kwargs = {
+            'piece_jointe': {'required': False},
+        }
+    
+    def validate(self, data):
+        """Validation des données de mise à jour"""
+        # Vérifier que l'excuse peut être modifiée
+        if not self.instance.can_be_modified:
+            raise serializers.ValidationError(
+                'Cette excuse ne peut plus être modifiée.'
+            )
+        
+        date_debut = data.get('date_debut', self.instance.date_debut)
+        date_fin = data.get('date_fin', self.instance.date_fin)
+        
+        # Vérifier que la date de fin est après la date de début
+        if date_fin < date_debut:
+            raise serializers.ValidationError({
+                'date_fin': 'La date de fin doit être postérieure à la date de début.'
+            })
+        
+        # Vérifier qu'il n'y a pas de chevauchement avec d'autres excuses
+        arbitre = self.instance.arbitre
+        overlapping_excuses = ExcuseArbitre.objects.filter(
+            arbitre=arbitre,
+            status__in=['en_attente', 'acceptee'],
+            date_debut__lte=date_fin,
+            date_fin__gte=date_debut
+        ).exclude(id=self.instance.id)
+        
+        if overlapping_excuses.exists():
+            raise serializers.ValidationError({
+                'date_debut': 'Vous avez déjà une excuse en cours pour cette période.',
+                'date_fin': 'Vous avez déjà une excuse en cours pour cette période.'
+            })
+        
+        return data
+    
+    def validate_cause(self, value):
+        """Validation de la cause"""
+        if len(value.strip()) < 10:
+            raise serializers.ValidationError(
+                'La cause de l\'excuse doit contenir au moins 10 caractères.'
+            )
+        return value.strip()
 

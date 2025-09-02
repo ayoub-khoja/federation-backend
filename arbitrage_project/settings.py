@@ -213,3 +213,36 @@ except ImportError:
     VAPID_PRIVATE_KEY = "default_private_key"
     VAPID_PUBLIC_KEY = "default_public_key"
     VAPID_EMAIL = "admin@arbitrage.tn"
+
+# ============================================================================
+# CONFIGURATION FIREBASE CLOUD MESSAGING (FCM)
+# ============================================================================
+
+# Chemin vers le fichier de clé de service Firebase
+# Remplacez par le chemin vers votre fichier firebase-service-account-key.json
+FIREBASE_SERVICE_ACCOUNT_PATH = os.path.join(BASE_DIR, 'firebase-service-account-key.json')
+
+# Configuration Firebase alternative (variables d'environnement)
+# Utilisez cette méthode si vous préférez stocker les clés dans les variables d'environnement
+FIREBASE_CONFIG = {
+    "type": "service_account",
+    "project_id": "federation-16c7a",  # Votre Project ID réel
+    "private_key_id": "a102a76da2a592bcaaccae5906e0434b4acd04cc",
+    "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCERDnFKxeOMdby\ntrL8UPriijZxvoXCFR6bOfylFgTgJVpRDQ3tUNv1/jXzW2ZuSDqp1vkTnGV+GnjE\nhdTprJrkkONczZzRyFmqMRQs8bDAtzF37acdkfkZniekGYu/Z0cHD0JXEPudHztI\n33ly2pVqtOarevrHmZcIXGwReqp98x9MU339eCNvT3ogMqyeJTowHKOJS6vOOM2G\nbM59s+pmdvDbVlZy/07donoyffs/fupgMfEhaB6Dj6dpaBisZ5sB/oOTJ1EVTfHB\nhC2KzdmjZ5ZRhL/j1oGam7a13IAb8VOY4jQssaMyG5tUCZNLjo2gXcqG06kTiScC\njZE3avy7AgMBAAECggEACbsROvm8Hmh5RVr+mQSGKKN9dOnM4mX2XfoqpaSUkD7/\nQYZB14tC23qr0m8Pfp6Ovk8D/Rbc+qWM6/ximRxrOtST/ZBc8KwaOKSqtNHFLLBt\nkcKosEq8dk+F4BNHDjpVZeYP/eLQeBNDo81ZHIOLSZHshIIkMAoTK/jMtI5/O4vL\n1qIFqNcnrWcCxLIo1mQlJiaSxlldVJZLkf3JGQ1+Z6gbxdSFmJokYuebcw69Dqwv\nKA91p1RB/47CdA1RVJJXHcLbT/3Qbgn9YiCGeWXqL5y9kglAEg3Y/RTwmf+cbfxP\nqK9LMotsrHLOQUMQ46WhFRAUjMwRP/7U9ce7RT4YtQKBgQC5av/FUwUtUKxmjL/h\nCnw0qUjtb/N/mxM9Rg8nVipsPjJ1RWEJ9jiZJaWcuhfcGWquQRMf27Nw8arGvz91\n/2pOM6NeXTK/RGtmxjhmIyrII/snJt14LR6ZJQ1pp7LIlqmW5T5G1v+fLZ4bJ6CX\n4mZs1WNMAcbJ6KVxpvpY2dFNpQKBgQC2nZxyWR3ZLfi8rJfND4892GV9L0rBqo1G\n9uOpSW8G5ZQu0BvSz/2jQ/lyvVVdK0UDHEzXBI/x8K6xa3BEfXyIj0euk7BRymKP\nb3lNjgEfYXtKkbHd9TdVwpMfeeHotV85ZZDfPxjFPSTtM5ZlslkR6ntndMv8jXT6\n6ClsuBvS3wKBgB61T+L4WvUkVUkuqmC1Adke6EsarXNG1ariPYRASwpeSrENaoLh\n2oHSsFkCoQz80KRHdslh85gTDjuYVQRP5uVIvBfWy57N0BPXZGPWEzHOc7wKPce3\ngUfP0SbcdUmvWir5kJTe6rsMLRFGQNymzFveA3IFIU0zUKNAClpIyNdZAoGAXmCK\nUBZ6dJlrqabRNStLbjz+BnqAeiJ4rSo/cmf/N2NC+AaZupO/k7c3nfL3wRTxr6/a\njm1PL0yiHBNYjC0GRVU3SKQPRdYApfyIhmpTbjJlE57Ee9+VX38VpfjJpgjGU9WH\nz7i+RoFZKjW1Do3jtnymlksoeTdqM5n0frmPt6UCgYBjILhOa7V0IzAoc1V0D2hl\neRNUILqk56/b2g/jpgzn5XLYqI7izVj/j0tpmKdtoq8X8LrPybE9WgqcbRD1fYzs\nXIg33UvUGYmO3qujXbxXPTDx14ZBiThMmUyDIMyi+fQiZl2fDB1Sz061vobxViOl\noF3KEYc/Fac2zJq70+zelQ==\n-----END PRIVATE KEY-----\n",
+    "client_email": "firebase-adminsdk-fbsvc@federation-16c7a.iam.gserviceaccount.com",
+    "client_id": "110350408404502535551",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40federation-16c7a.iam.gserviceaccount.com",
+    "universe_domain": "googleapis.com"
+}
+
+# Configuration des notifications FCM
+FCM_NOTIFICATION_SETTINGS = {
+    'DEFAULT_SOUND': 'default',
+    'DEFAULT_CHANNEL_ID': 'federation_channel',
+    'DEFAULT_PRIORITY': 'high',
+    'DEFAULT_BADGE': 1,
+    'CLEANUP_INACTIVE_DAYS': 30,  # Jours avant de marquer un token comme inactif
+}

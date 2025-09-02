@@ -498,3 +498,377 @@ class PushSubscription(models.Model):
             }
         }
 
+# ============================================================================
+# FIREBASE CLOUD MESSAGING (FCM)
+# ============================================================================
+
+class FCMToken(models.Model):
+    """Modèle pour stocker les tokens FCM des appareils mobiles"""
+    
+    DEVICE_TYPE_CHOICES = [
+        ('ios', 'iOS'),
+        ('android', 'Android'),
+        ('web', 'Web'),
+    ]
+    
+    # Relations avec les utilisateurs (peut être un Arbitre, Commissaire ou Admin)
+    arbitre = models.ForeignKey(
+        Arbitre,
+        on_delete=models.CASCADE,
+        related_name='fcm_tokens',
+        null=True,
+        blank=True,
+        verbose_name="Arbitre"
+    )
+    commissaire = models.ForeignKey(
+        Commissaire,
+        on_delete=models.CASCADE,
+        related_name='fcm_tokens',
+        null=True,
+        blank=True,
+        verbose_name="Commissaire"
+    )
+    admin = models.ForeignKey(
+        Admin,
+        on_delete=models.CASCADE,
+        related_name='fcm_tokens',
+        null=True,
+        blank=True,
+        verbose_name="Administrateur"
+    )
+    
+    # Informations du token FCM
+    token = models.CharField(max_length=255, unique=True, verbose_name="Token FCM")
+    device_type = models.CharField(
+        max_length=20,
+        choices=DEVICE_TYPE_CHOICES,
+        verbose_name="Type d'appareil"
+    )
+    device_id = models.CharField(max_length=255, blank=True, null=True, verbose_name="ID de l'appareil")
+    app_version = models.CharField(max_length=50, blank=True, null=True, verbose_name="Version de l'app")
+    
+    # Statut et métadonnées
+    is_active = models.BooleanField(default=True, verbose_name="Token actif")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Date de mise à jour")
+    last_used = models.DateTimeField(auto_now=True, verbose_name="Dernière utilisation")
+    
+    class Meta:
+        db_table = 'fcm_tokens'
+        verbose_name = "Token FCM"
+        verbose_name_plural = "Tokens FCM"
+        unique_together = ['token']
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        user_info = self.get_user_info()
+        return f"{user_info} - {self.device_type} - {self.token[:20]}..."
+    
+    def get_user_info(self):
+        """Retourne les informations de l'utilisateur associé"""
+        if self.arbitre:
+            return f"Arbitre: {self.arbitre.get_full_name()}"
+        elif self.commissaire:
+            return f"Commissaire: {self.commissaire.get_full_name()}"
+        elif self.admin:
+            return f"Admin: {self.admin.get_full_name()}"
+        return "Utilisateur inconnu"
+    
+    def get_user(self):
+        """Retourne l'utilisateur associé (Arbitre, Commissaire ou Admin)"""
+        if self.arbitre:
+            return self.arbitre
+        elif self.commissaire:
+            return self.commissaire
+        elif self.admin:
+            return self.admin
+        return None
+    
+    def clean(self):
+        """Validation: un token doit être associé à exactement un utilisateur"""
+        from django.core.exceptions import ValidationError
+        
+        user_count = sum([
+            bool(self.arbitre),
+            bool(self.commissaire),
+            bool(self.admin)
+        ])
+        
+        if user_count != 1:
+            raise ValidationError("Un token FCM doit être associé à exactement un utilisateur.")
+    
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+# ============================================================================
+# NOTIFICATIONS DE DÉSIGNATION
+# ============================================================================
+
+class NotificationDesignation(models.Model):
+    """Modèle pour l'historique des notifications de désignation d'arbitres"""
+    
+    DESIGNATION_TYPE_CHOICES = [
+        ('arbitre_principal', 'Arbitre Principal'),
+        ('arbitre_assistant_1', 'Assistant 1'),
+        ('arbitre_assistant_2', 'Assistant 2'),
+        ('arbitre_quatrieme', 'Quatrième Arbitre'),
+        ('commissaire_match', 'Commissaire de Match'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('sent', 'Envoyée'),
+        ('delivered', 'Livrée'),
+        ('read', 'Lue'),
+        ('failed', 'Échouée'),
+    ]
+    
+    # Relations
+    arbitre = models.ForeignKey(
+        Arbitre,
+        on_delete=models.CASCADE,
+        related_name='designation_notifications',
+        verbose_name="Arbitre"
+    )
+    
+    # Informations du match
+    match_id = models.IntegerField(verbose_name="ID du match")
+    match_nom = models.CharField(max_length=200, verbose_name="Nom du match")
+    match_date = models.DateTimeField(verbose_name="Date du match")
+    match_lieu = models.CharField(max_length=200, verbose_name="Lieu du match")
+    
+    # Type de désignation
+    designation_type = models.CharField(
+        max_length=30,
+        choices=DESIGNATION_TYPE_CHOICES,
+        verbose_name="Type de désignation"
+    )
+    
+    # Contenu de la notification
+    title = models.CharField(max_length=200, verbose_name="Titre")
+    message = models.TextField(verbose_name="Message")
+    
+    # Statut et métadonnées
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='sent',
+        verbose_name="Statut"
+    )
+    is_read = models.BooleanField(default=False, verbose_name="Notification lue")
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
+    sent_at = models.DateTimeField(null=True, blank=True, verbose_name="Date d'envoi")
+    read_at = models.DateTimeField(null=True, blank=True, verbose_name="Date de lecture")
+    
+    # Données supplémentaires
+    fcm_response = models.JSONField(null=True, blank=True, verbose_name="Réponse FCM")
+    error_message = models.TextField(blank=True, verbose_name="Message d'erreur")
+    
+    class Meta:
+        db_table = 'notification_designations'
+        verbose_name = "Notification de Désignation"
+        verbose_name_plural = "Notifications de Désignation"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['arbitre', '-created_at']),
+            models.Index(fields=['match_id']),
+            models.Index(fields=['status']),
+        ]
+    
+    def __str__(self):
+        return f"{self.arbitre.get_full_name()} - {self.match_nom} - {self.get_designation_type_display()}"
+    
+    def mark_as_read(self):
+        """Marquer la notification comme lue"""
+        if not self.is_read:
+            self.is_read = True
+            self.read_at = timezone.now()
+            self.status = 'read'
+            self.save(update_fields=['is_read', 'read_at', 'status'])
+    
+    def mark_as_delivered(self):
+        """Marquer la notification comme livrée"""
+        if self.status == 'sent':
+            self.status = 'delivered'
+            self.save(update_fields=['status'])
+    
+    def mark_as_failed(self, error_message=""):
+        """Marquer la notification comme échouée"""
+        self.status = 'failed'
+        self.error_message = error_message
+        self.save(update_fields=['status', 'error_message'])
+    
+    @property
+    def time_since_created(self):
+        """Temps écoulé depuis la création"""
+        return timezone.now() - self.created_at
+    
+    @property
+    def is_recent(self):
+        """Vérifier si la notification est récente (moins de 24h)"""
+        return self.time_since_created.total_seconds() < 86400  # 24 heures
+
+# ============================================================================
+# MODÈLE EXCUSE ARBITRE
+# ============================================================================
+
+class ExcuseArbitre(models.Model):
+    """Modèle pour les excuses d'arbitres"""
+    
+    # Statuts possibles
+    STATUS_CHOICES = [
+        ('en_attente', 'En Attente'),
+        ('acceptee', 'Acceptée'),
+        ('refusee', 'Refusée'),
+        ('annulee', 'Annulée'),
+    ]
+    
+    # Relation avec l'arbitre
+    arbitre = models.ForeignKey(
+        Arbitre,
+        on_delete=models.CASCADE,
+        related_name='excuses',
+        verbose_name="Arbitre"
+    )
+    
+    # Informations de l'excuse
+    date_debut = models.DateField(
+        verbose_name="Date de début",
+        help_text="Date de début de l'indisponibilité"
+    )
+    date_fin = models.DateField(
+        verbose_name="Date de fin",
+        help_text="Date de fin de l'indisponibilité"
+    )
+    cause = models.TextField(
+        verbose_name="Cause de l'excuse",
+        help_text="Description détaillée de la raison de l'excuse"
+    )
+    piece_jointe = models.ImageField(
+        upload_to='excuses/',
+        blank=True,
+        null=True,
+        verbose_name="Pièce jointe",
+        help_text="Document justificatif (optionnel)"
+    )
+    
+    # Statut et gestion
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='en_attente',
+        verbose_name="Statut"
+    )
+    
+    # Commentaires de l'administration
+    commentaire_admin = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Commentaire de l'administration"
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Date de création"
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Date de modification"
+    )
+    
+    # Traitement
+    traite_par = models.ForeignKey(
+        Admin,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='excuses_traitees',
+        verbose_name="Traité par"
+    )
+    traite_le = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Traité le"
+    )
+    
+    class Meta:
+        verbose_name = "Excuse d'Arbitre"
+        verbose_name_plural = "Excuses d'Arbitres"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['arbitre', 'status']),
+            models.Index(fields=['date_debut', 'date_fin']),
+            models.Index(fields=['status', 'created_at']),
+        ]
+    
+    def __str__(self):
+        return f"Excuse de {self.arbitre.get_full_name()} - {self.date_debut} au {self.date_fin}"
+    
+    def get_status_display(self):
+        """Retourner le statut formaté"""
+        status_choices = dict(self.STATUS_CHOICES)
+        return status_choices.get(self.status, self.status)
+    
+    def get_duree(self):
+        """Calculer la durée de l'excuse en jours"""
+        return (self.date_fin - self.date_debut).days + 1
+    
+    def is_en_cours(self):
+        """Vérifier si l'excuse est en cours (date actuelle entre début et fin)"""
+        from django.utils import timezone
+        today = timezone.now().date()
+        return self.date_debut <= today <= self.date_fin
+    
+    def is_passee(self):
+        """Vérifier si l'excuse est passée"""
+        from django.utils import timezone
+        today = timezone.now().date()
+        return self.date_fin < today
+    
+    def is_future(self):
+        """Vérifier si l'excuse est future"""
+        from django.utils import timezone
+        today = timezone.now().date()
+        return self.date_debut > today
+    
+    def accepter(self, admin_user, commentaire=None):
+        """Accepter l'excuse"""
+        self.status = 'acceptee'
+        self.traite_par = admin_user
+        self.traite_le = timezone.now()
+        if commentaire:
+            self.commentaire_admin = commentaire
+        self.save()
+    
+    def refuser(self, admin_user, commentaire=None):
+        """Refuser l'excuse"""
+        self.status = 'refusee'
+        self.traite_par = admin_user
+        self.traite_le = timezone.now()
+        if commentaire:
+            self.commentaire_admin = commentaire
+        self.save()
+    
+    def annuler(self, admin_user=None, commentaire=None):
+        """Annuler l'excuse"""
+        self.status = 'annulee'
+        if admin_user:
+            self.traite_par = admin_user
+            self.traite_le = timezone.now()
+        if commentaire:
+            self.commentaire_admin = commentaire
+        self.save()
+    
+    @property
+    def can_be_modified(self):
+        """Vérifier si l'excuse peut être modifiée (seulement si en attente)"""
+        return self.status == 'en_attente'
+    
+    @property
+    def can_be_cancelled(self):
+        """Vérifier si l'excuse peut être annulée"""
+        return self.status in ['en_attente', 'acceptee'] and not self.is_passee()
+

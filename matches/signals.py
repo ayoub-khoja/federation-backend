@@ -12,7 +12,7 @@ def send_designation_notification(sender, instance, created, **kwargs):
     """
     Envoyer une notification push automatiquement lors de la création d'une désignation
     """
-    if created and instance.status == 'proposed':
+    if created and instance.status in ['proposed', 'accepted', 'confirmed']:
         try:
             print(f"🔔 Désignation créée pour {instance.arbitre.get_full_name()}")
             
@@ -24,21 +24,31 @@ def send_designation_notification(sender, instance, created, **kwargs):
                 'date': instance.match.match_date.strftime('%d/%m/%Y'),
                 'time': instance.match.match_time.strftime('%H:%M'),
                 'stade': instance.match.stadium,
-                'type_match': instance.match.get_match_type_display(),
-                'categorie': instance.match.get_category_display(),
+                'type_match': instance.match.type_match.nom if instance.match.type_match else "Non défini",
+                'categorie': instance.match.categorie.nom if instance.match.categorie else "Non définie",
                 'type_designation': instance.get_type_designation_display()
             }
             
-            # Envoyer la notification via le service
-            result = push_service.send_designation_notification(
-                arbitres=[instance.arbitre],
-                match_info=match_info
+            # Envoyer la notification via le nouveau système FCM
+            from firebase_config import send_notification_to_user
+            
+            result = send_notification_to_user(
+                user=instance.arbitre,
+                title="🏆 Nouvelle Désignation d'Arbitrage",
+                body=f"Vous avez été désigné pour le match {match_info['home_team']} vs {match_info['away_team']}",
+                data={
+                    'type': 'designation',
+                    'match_id': str(match_info['id']),
+                    'date_match': match_info['date'],
+                    'stade': match_info['stade'],
+                    'type_designation': match_info['type_designation']
+                }
             )
             
             print(f"📤 Notification envoyée: {result}")
             
             # Marquer la notification comme envoyée
-            if result['success'] > 0:
+            if result.get('errors', 0) == 0:
                 instance.notification_envoyee = True
                 instance.date_notification = timezone.now()
                 instance.save(update_fields=['notification_envoyee', 'date_notification'])

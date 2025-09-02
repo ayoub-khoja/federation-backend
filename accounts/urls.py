@@ -75,11 +75,40 @@ urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     
     # ============================================================================
-    # NOTIFICATIONS PUSH
+    # NOTIFICATIONS PUSH (ANCIEN SYSTÈME)
     # ============================================================================
     path('push/subscribe/', views.push_subscribe, name='push_subscribe'),
     path('push/unsubscribe/', views.push_unsubscribe, name='push_unsubscribe'),
     path('push/status/', views.push_subscriptions_status, name='push_subscriptions_status'),
     path('push/test/', views.test_push_notification, name='test_push_notification'),
+    
+    # ============================================================================
+    # FIREBASE CLOUD MESSAGING (FCM) - NOUVEAU SYSTÈME
+    # ============================================================================
+    path('fcm/subscribe/', views.fcm_subscribe_mobile, name='fcm_subscribe_mobile'),
+    path('fcm/subscribe', views.fcm_subscribe_mobile, name='fcm_subscribe_mobile_no_slash'),
+    path('fcm/unsubscribe/', views.fcm_unsubscribe_mobile, name='fcm_unsubscribe_mobile'),
+    path('fcm/unsubscribe', views.fcm_unsubscribe_mobile, name='fcm_unsubscribe_mobile_no_slash'),
+    path('fcm/status/', views.fcm_tokens_status, name='fcm_tokens_status'),
+    path('fcm/test/', views.fcm_test_notification, name='fcm_test_notification'),
+    path('fcm/stats/', views.fcm_notification_stats, name='fcm_notification_stats'),
+    path('fcm/broadcast/', views.fcm_send_broadcast, name='fcm_send_broadcast'),
+    
+    # ============================================================================
+    # NOTIFICATIONS DE DÉSIGNATION D'ARBITRES
+    # ============================================================================
+    path('arbitres/notify-designation/', views.notify_arbitre_designation, name='notify_arbitre_designation'),
+    path('arbitres/notify-multiple/', views.notify_multiple_arbitres, name='notify_multiple_arbitres'),
+    path('arbitres/<int:arbitre_id>/notifications/', views.arbitre_notifications_history, name='arbitre_notifications_history'),
+    path('notifications/<int:notification_id>/read/', views.mark_notification_read, name='mark_notification_read'),
+    
+    # ============================================================================
+    # EXCUSES D'ARBITRES
+    # ============================================================================
+    path('arbitres/excuses/', views.create_excuse_arbitre, name='create_excuse_arbitre'),
+    path('arbitres/excuses/list/', views.list_excuses_arbitre, name='list_excuses_arbitre'),
+    path('arbitres/excuses/<int:excuse_id>/', views.detail_excuse_arbitre, name='detail_excuse_arbitre'),
+    path('arbitres/excuses/<int:excuse_id>/update/', views.update_excuse_arbitre, name='update_excuse_arbitre'),
+    path('arbitres/excuses/<int:excuse_id>/cancel/', views.cancel_excuse_arbitre, name='cancel_excuse_arbitre'),
 ]
 

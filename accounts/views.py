@@ -8,7 +8,7 @@ from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.core.paginator import Paginator
 from django.db.models import Q
-from .models import Arbitre, Commissaire, Admin, LigueArbitrage
+from .models import Arbitre, Commissaire, Admin, LigueArbitrage, ExcuseArbitre
 from .serializers import (
     ArbitreRegistrationSerializer, ArbitreProfileSerializer, ArbitreUpdateSerializer,
     ArbitreLoginSerializer,
@@ -17,7 +17,9 @@ from .serializers import (
     AdminRegistrationSerializer, AdminProfileSerializer, AdminUpdateSerializer,
     AdminLoginSerializer,
     ChangePasswordSerializer, LigueArbitrageSerializer,
-    UnifiedLoginSerializer
+    UnifiedLoginSerializer,
+    ExcuseArbitreCreateSerializer, ExcuseArbitreListSerializer, 
+    ExcuseArbitreDetailSerializer, ExcuseArbitreUpdateSerializer
 )
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -500,15 +502,56 @@ def push_unsubscribe(request):
 @api_view(['PUT', 'PATCH'])
 @permission_classes([permissions.IsAuthenticated])
 def arbitre_update_profile(request):
-    """Mise à jour du profil de l'arbitre connecté"""
+    """Mise à jour complète du profil de l'arbitre connecté - tous les champs modifiables"""
     if not isinstance(request.user, Arbitre):
-        return Response({'detail': 'Accès non autorisé'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({
+            'success': False,
+            'message': 'Accès non autorisé - Seuls les arbitres peuvent modifier leur profil',
+            'error_code': 'ACCESS_DENIED'
+        }, status=status.HTTP_403_FORBIDDEN)
     
-    serializer = ArbitreUpdateSerializer(request.user, data=request.data, partial=True)
-    if serializer.is_valid():
-        serializer.save()
-        return Response({'message': 'Profil mis à jour avec succès'})
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        # Utiliser partial=True pour permettre la mise à jour partielle
+        serializer = ArbitreUpdateSerializer(request.user, data=request.data, partial=True)
+        
+        if serializer.is_valid():
+            # Sauvegarder les modifications
+            arbitre = serializer.save()
+            
+            # Sérialiser les données mises à jour pour la réponse
+            from .serializers import ArbitreProfileSerializer
+            updated_data = ArbitreProfileSerializer(arbitre).data
+            
+            return Response({
+                'success': True,
+                'message': 'Profil arbitre mis à jour avec succès',
+                'arbitre': updated_data,
+                'updated_fields': list(request.data.keys())
+            }, status=status.HTTP_200_OK)
+        
+        # Gestion des erreurs de validation
+        error_details = {}
+        for field, errors in serializer.errors.items():
+            if isinstance(errors, list):
+                error_details[field] = errors[0] if errors else "Erreur de validation"
+            else:
+                error_details[field] = str(errors)
+        
+        return Response({
+            'success': False,
+            'message': 'Erreur de validation des données',
+            'errors': error_details,
+            'error_code': 'VALIDATION_ERROR'
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la mise à jour du profil arbitre: {e}")
+        return Response({
+            'success': False,
+            'message': 'Erreur interne du serveur lors de la mise à jour',
+            'error': str(e),
+            'error_code': 'INTERNAL_ERROR'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # ============================================================================
 # VUES POUR LES COMMISSAIRES
@@ -1176,3 +1219,1002 @@ def test_push_notification(request):
             {'detail': 'Erreur lors du test de notification'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+# ============================================================================
+# FIREBASE CLOUD MESSAGING (FCM) - NOUVELLES VUES
+# ============================================================================
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def fcm_subscribe_mobile(request):
+    """Enregistrer un token FCM pour une application mobile"""
+    try:
+        import json
+        from .models import FCMToken
+        
+        data = json.loads(request.body)
+        fcm_token = data.get('fcm_token')
+        device_type = data.get('device_type', 'web')  # ios, android, web
+        device_id = data.get('device_id', '')
+        app_version = data.get('app_version', '')
+        
+        if not fcm_token:
+            return Response(
+                {'error': 'Token FCM requis'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if device_type not in ['ios', 'android', 'web']:
+            return Response(
+                {'error': 'Type d\'appareil invalide. Utilisez: ios, android, ou web'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Déterminer le type d'utilisateur
+        user_type = None
+        if isinstance(request.user, Arbitre):
+            user_type = 'arbitre'
+        elif isinstance(request.user, Commissaire):
+            user_type = 'commissaire'
+        elif isinstance(request.user, Admin):
+            user_type = 'admin'
+        else:
+            return Response(
+                {'error': 'Type d\'utilisateur non supporté'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Créer ou mettre à jour le token FCM
+        fcm_token_obj, created = FCMToken.objects.get_or_create(
+            token=fcm_token,
+            defaults={
+                user_type: request.user,
+                'device_type': device_type,
+                'device_id': device_id,
+                'app_version': app_version,
+                'is_active': True
+            }
+        )
+        
+        if not created:
+            # Mettre à jour le token existant
+            setattr(fcm_token_obj, user_type, request.user)
+            fcm_token_obj.device_type = device_type
+            fcm_token_obj.device_id = device_id
+            fcm_token_obj.app_version = app_version
+            fcm_token_obj.is_active = True
+            fcm_token_obj.save()
+        
+        return Response({
+            'success': True,
+            'message': f'Token FCM {device_type} enregistré avec succès',
+            'created': created,
+            'user_type': user_type
+        })
+        
+    except json.JSONDecodeError:
+        return Response(
+            {'error': 'Données JSON invalides'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        return Response(
+            {'error': f'Erreur lors de l\'enregistrement: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def fcm_unsubscribe_mobile(request):
+    """Désactiver un token FCM pour une application mobile"""
+    try:
+        import json
+        from .models import FCMToken
+        
+        data = json.loads(request.body)
+        fcm_token = data.get('fcm_token')
+        
+        if not fcm_token:
+            return Response(
+                {'error': 'Token FCM requis'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Déterminer le type d'utilisateur
+        user_type = None
+        if isinstance(request.user, Arbitre):
+            user_type = 'arbitre'
+        elif isinstance(request.user, Commissaire):
+            user_type = 'commissaire'
+        elif isinstance(request.user, Admin):
+            user_type = 'admin'
+        else:
+            return Response(
+                {'error': 'Type d\'utilisateur non supporté'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Désactiver le token FCM
+        fcm_token_obj = FCMToken.objects.filter(
+            token=fcm_token,
+            **{user_type: request.user}
+        ).first()
+        
+        if fcm_token_obj:
+            fcm_token_obj.is_active = False
+            fcm_token_obj.save()
+            
+            return Response({
+                'success': True,
+                'message': 'Token FCM désactivé avec succès'
+            })
+        else:
+            return Response(
+                {'error': 'Token FCM non trouvé'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+    except json.JSONDecodeError:
+        return Response(
+            {'error': 'Données JSON invalides'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        return Response(
+            {'error': f'Erreur lors de la désactivation: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def fcm_tokens_status(request):
+    """Obtenir le statut des tokens FCM de l'utilisateur"""
+    try:
+        from .models import FCMToken
+        
+        # Déterminer le type d'utilisateur
+        user_type = None
+        if isinstance(request.user, Arbitre):
+            user_type = 'arbitre'
+        elif isinstance(request.user, Commissaire):
+            user_type = 'commissaire'
+        elif isinstance(request.user, Admin):
+            user_type = 'admin'
+        else:
+            return Response(
+                {'error': 'Type d\'utilisateur non supporté'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Récupérer tous les tokens de l'utilisateur
+        fcm_tokens = FCMToken.objects.filter(
+            **{user_type: request.user}
+        ).order_by('-created_at')
+        
+        tokens_data = []
+        for token in fcm_tokens:
+            tokens_data.append({
+                'id': token.id,
+                'token': token.token[:20] + '...',  # Masquer le token complet
+                'device_type': token.device_type,
+                'device_id': token.device_id,
+                'app_version': token.app_version,
+                'is_active': token.is_active,
+                'created_at': token.created_at,
+                'last_used': token.last_used
+            })
+        
+        return Response({
+            'success': True,
+            'tokens': tokens_data,
+            'total_tokens': len(tokens_data),
+            'active_tokens': len([t for t in tokens_data if t['is_active']])
+        })
+        
+    except Exception as e:
+        return Response(
+            {'error': f'Erreur lors de la récupération: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def fcm_test_notification(request):
+    """Tester l'envoi d'une notification FCM (pour les tests)"""
+    try:
+        from firebase_config import send_notification_to_user
+        
+        # Vérifier que l'utilisateur a au moins un token FCM actif
+        from .models import FCMToken
+        
+        user_type = None
+        if isinstance(request.user, Arbitre):
+            user_type = 'arbitre'
+        elif isinstance(request.user, Commissaire):
+            user_type = 'commissaire'
+        elif isinstance(request.user, Admin):
+            user_type = 'admin'
+        else:
+            return Response(
+                {'error': 'Type d\'utilisateur non supporté'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        active_tokens = FCMToken.objects.filter(
+            **{user_type: request.user},
+            is_active=True
+        )
+        
+        if not active_tokens.exists():
+            return Response(
+                {'error': 'Aucun token FCM actif trouvé'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Envoyer une notification de test
+        results = send_notification_to_user(
+            user=request.user,
+            title="🧪 Test FCM",
+            body="Ceci est un test de notification Firebase Cloud Messaging",
+            data={'type': 'test', 'timestamp': timezone.now().isoformat()}
+        )
+        
+        return Response({
+            'success': True,
+            'message': 'Notification de test FCM envoyée',
+            'results': results
+        })
+        
+    except Exception as e:
+        return Response(
+            {'error': f'Erreur lors du test: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def fcm_notification_stats(request):
+    """Obtenir les statistiques des notifications FCM (admin seulement)"""
+    try:
+        # Vérifier que l'utilisateur est un admin
+        if not isinstance(request.user, Admin):
+            return Response(
+                {'error': 'Accès refusé. Seuls les administrateurs peuvent voir ces statistiques'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        from firebase_config import get_notification_stats
+        
+        stats = get_notification_stats()
+        
+        return Response({
+            'success': True,
+            'stats': stats
+        })
+        
+    except Exception as e:
+        return Response(
+            {'error': f'Erreur lors de la récupération des statistiques: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def fcm_send_broadcast(request):
+    """Envoyer une notification broadcast à tous les utilisateurs (admin seulement)"""
+    try:
+        import json
+        
+        # Vérifier que l'utilisateur est un admin
+        if not isinstance(request.user, Admin):
+            return Response(
+                {'error': 'Accès refusé. Seuls les administrateurs peuvent envoyer des broadcasts'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        data = json.loads(request.body)
+        title = data.get('title')
+        body = data.get('body')
+        data_payload = data.get('data', {})
+        device_types = data.get('device_types', None)  # ['ios', 'android', 'web']
+        
+        if not title or not body:
+            return Response(
+                {'error': 'Titre et corps de la notification requis'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        from firebase_config import send_notification_to_all_platforms
+        
+        # Envoyer la notification broadcast
+        results = send_notification_to_all_platforms(
+            title=title,
+            body=body,
+            data=data_payload,
+            device_types=device_types
+        )
+        
+        return Response({
+            'success': True,
+            'message': 'Notification broadcast envoyée',
+            'results': results
+        })
+        
+    except json.JSONDecodeError:
+        return Response(
+            {'error': 'Données JSON invalides'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        return Response(
+            {'error': f'Erreur lors de l\'envoi: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+# ============================================================================
+# NOTIFICATIONS DE DÉSIGNATION D'ARBITRES
+# ============================================================================
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def notify_arbitre_designation(request):
+    """Notifier un arbitre lors d'une désignation"""
+    try:
+        import json
+        from .models import NotificationDesignation
+        from firebase_config import send_notification_to_user
+        
+        # Vérifier que l'utilisateur est un admin
+        if not isinstance(request.user, Admin):
+            return Response(
+                {'error': 'Accès refusé. Seuls les administrateurs peuvent notifier les arbitres'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        data = json.loads(request.body)
+        
+        # Validation des données requises
+        required_fields = ['arbitre_id', 'arbitre_nom', 'arbitre_email', 'match_id', 
+                          'match_nom', 'match_date', 'match_lieu', 'designation_type', 'message']
+        
+        for field in required_fields:
+            if field not in data:
+                return Response(
+                    {'error': f'Champ requis manquant: {field}'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Récupérer l'arbitre
+        try:
+            arbitre = Arbitre.objects.get(id=data['arbitre_id'], is_active=True)
+        except Arbitre.DoesNotExist:
+            return Response(
+                {'error': 'Arbitre non trouvé ou inactif'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Créer l'enregistrement de notification
+        notification = NotificationDesignation.objects.create(
+            arbitre=arbitre,
+            match_id=data['match_id'],
+            match_nom=data['match_nom'],
+            match_date=data['match_date'],
+            match_lieu=data['match_lieu'],
+            designation_type=data['designation_type'],
+            title=f"🏆 Nouvelle Désignation - {data['match_nom']}",
+            message=data['message'],
+            status='sent'
+        )
+        
+        # Envoyer la notification FCM
+        try:
+            fcm_results = send_notification_to_user(
+                user=arbitre,
+                title=notification.title,
+                body=notification.message,
+                data={
+                    'type': 'designation',
+                    'match_id': str(data['match_id']),
+                    'designation_type': data['designation_type'],
+                    'notification_id': str(notification.id),
+                    'match_date': data['match_date'],
+                    'match_lieu': data['match_lieu']
+                }
+            )
+            
+            # Mettre à jour le statut de la notification
+            if fcm_results.get('errors', 0) == 0:
+                notification.mark_as_delivered()
+                notification.fcm_response = fcm_results
+            else:
+                notification.mark_as_failed(f"Erreur FCM: {fcm_results.get('error_details', 'Erreur inconnue')}")
+                notification.fcm_response = fcm_results
+            
+            notification.sent_at = timezone.now()
+            notification.save()
+            
+        except Exception as fcm_error:
+            notification.mark_as_failed(f"Erreur lors de l'envoi FCM: {str(fcm_error)}")
+            notification.save()
+            fcm_results = {'error': str(fcm_error)}
+        
+        return Response({
+            'success': True,
+            'message': 'Notification de désignation envoyée',
+            'notification_id': notification.id,
+            'arbitre': {
+                'id': arbitre.id,
+                'nom': arbitre.get_full_name(),
+                'email': arbitre.email
+            },
+            'fcm_results': fcm_results
+        })
+        
+    except json.JSONDecodeError:
+        return Response(
+            {'error': 'Données JSON invalides'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        return Response(
+            {'error': f'Erreur lors de l\'envoi: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def notify_multiple_arbitres(request):
+    """Notifier plusieurs arbitres lors de désignations"""
+    try:
+        import json
+        from .models import NotificationDesignation
+        from firebase_config import send_notification_to_user
+        
+        # Vérifier que l'utilisateur est un admin
+        if not isinstance(request.user, Admin):
+            return Response(
+                {'error': 'Accès refusé. Seuls les administrateurs peuvent notifier les arbitres'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        data = json.loads(request.body)
+        notifications_data = data.get('notifications', [])
+        
+        if not notifications_data:
+            return Response(
+                {'error': 'Aucune notification à envoyer'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        results = []
+        success_count = 0
+        error_count = 0
+        
+        for notification_data in notifications_data:
+            try:
+                # Validation des données requises
+                required_fields = ['arbitre_id', 'arbitre_nom', 'arbitre_email', 'match_id', 
+                                  'match_nom', 'match_date', 'match_lieu', 'designation_type', 'message']
+                
+                missing_fields = [field for field in required_fields if field not in notification_data]
+                if missing_fields:
+                    results.append({
+                        'arbitre_id': notification_data.get('arbitre_id'),
+                        'success': False,
+                        'error': f'Champs manquants: {", ".join(missing_fields)}'
+                    })
+                    error_count += 1
+                    continue
+                
+                # Récupérer l'arbitre
+                try:
+                    arbitre = Arbitre.objects.get(id=notification_data['arbitre_id'], is_active=True)
+                except Arbitre.DoesNotExist:
+                    results.append({
+                        'arbitre_id': notification_data['arbitre_id'],
+                        'success': False,
+                        'error': 'Arbitre non trouvé ou inactif'
+                    })
+                    error_count += 1
+                    continue
+                
+                # Créer l'enregistrement de notification
+                notification = NotificationDesignation.objects.create(
+                    arbitre=arbitre,
+                    match_id=notification_data['match_id'],
+                    match_nom=notification_data['match_nom'],
+                    match_date=notification_data['match_date'],
+                    match_lieu=notification_data['match_lieu'],
+                    designation_type=notification_data['designation_type'],
+                    title=f"🏆 Nouvelle Désignation - {notification_data['match_nom']}",
+                    message=notification_data['message'],
+                    status='sent'
+                )
+                
+                # Envoyer la notification FCM
+                try:
+                    fcm_results = send_notification_to_user(
+                        user=arbitre,
+                        title=notification.title,
+                        body=notification.message,
+                        data={
+                            'type': 'designation',
+                            'match_id': str(notification_data['match_id']),
+                            'designation_type': notification_data['designation_type'],
+                            'notification_id': str(notification.id),
+                            'match_date': notification_data['match_date'],
+                            'match_lieu': notification_data['match_lieu']
+                        }
+                    )
+                    
+                    # Mettre à jour le statut de la notification
+                    if fcm_results.get('errors', 0) == 0:
+                        notification.mark_as_delivered()
+                        notification.fcm_response = fcm_results
+                    else:
+                        notification.mark_as_failed(f"Erreur FCM: {fcm_results.get('error_details', 'Erreur inconnue')}")
+                        notification.fcm_response = fcm_results
+                    
+                    notification.sent_at = timezone.now()
+                    notification.save()
+                    
+                    results.append({
+                        'arbitre_id': arbitre.id,
+                        'arbitre_nom': arbitre.get_full_name(),
+                        'notification_id': notification.id,
+                        'success': True,
+                        'fcm_results': fcm_results
+                    })
+                    success_count += 1
+                    
+                except Exception as fcm_error:
+                    notification.mark_as_failed(f"Erreur lors de l'envoi FCM: {str(fcm_error)}")
+                    notification.save()
+                    
+                    results.append({
+                        'arbitre_id': arbitre.id,
+                        'arbitre_nom': arbitre.get_full_name(),
+                        'notification_id': notification.id,
+                        'success': False,
+                        'error': f'Erreur FCM: {str(fcm_error)}'
+                    })
+                    error_count += 1
+                    
+            except Exception as e:
+                results.append({
+                    'arbitre_id': notification_data.get('arbitre_id'),
+                    'success': False,
+                    'error': f'Erreur générale: {str(e)}'
+                })
+                error_count += 1
+        
+        return Response({
+            'success': True,
+            'message': f'Notifications envoyées: {success_count} succès, {error_count} erreurs',
+            'summary': {
+                'total': len(notifications_data),
+                'success_count': success_count,
+                'error_count': error_count
+            },
+            'results': results
+        })
+        
+    except json.JSONDecodeError:
+        return Response(
+            {'error': 'Données JSON invalides'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        return Response(
+            {'error': f'Erreur lors de l\'envoi: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def arbitre_notifications_history(request, arbitre_id):
+    """Historique des notifications d'un arbitre"""
+    try:
+        from .models import NotificationDesignation
+        
+        # Vérifier que l'utilisateur est un admin ou l'arbitre lui-même
+        if isinstance(request.user, Admin):
+            # Admin peut voir toutes les notifications
+            try:
+                arbitre = Arbitre.objects.get(id=arbitre_id)
+            except Arbitre.DoesNotExist:
+                return Response(
+                    {'error': 'Arbitre non trouvé'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        elif isinstance(request.user, Arbitre) and request.user.id == arbitre_id:
+            # L'arbitre peut voir ses propres notifications
+            arbitre = request.user
+        else:
+            return Response(
+                {'error': 'Accès refusé'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Récupérer les notifications avec pagination
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 20))
+        status_filter = request.GET.get('status', None)
+        
+        notifications = NotificationDesignation.objects.filter(arbitre=arbitre)
+        
+        if status_filter:
+            notifications = notifications.filter(status=status_filter)
+        
+        notifications = notifications.order_by('-created_at')
+        
+        # Pagination
+        from django.core.paginator import Paginator
+        paginator = Paginator(notifications, page_size)
+        page_obj = paginator.get_page(page)
+        
+        notifications_data = []
+        for notification in page_obj:
+            notifications_data.append({
+                'id': notification.id,
+                'match_id': notification.match_id,
+                'match_nom': notification.match_nom,
+                'match_date': notification.match_date,
+                'match_lieu': notification.match_lieu,
+                'designation_type': notification.designation_type,
+                'designation_type_display': notification.get_designation_type_display(),
+                'title': notification.title,
+                'message': notification.message,
+                'status': notification.status,
+                'status_display': notification.get_status_display(),
+                'is_read': notification.is_read,
+                'created_at': notification.created_at,
+                'sent_at': notification.sent_at,
+                'read_at': notification.read_at,
+                'is_recent': notification.is_recent
+            })
+        
+        return Response({
+            'success': True,
+            'arbitre': {
+                'id': arbitre.id,
+                'nom': arbitre.get_full_name(),
+                'email': arbitre.email
+            },
+            'notifications': notifications_data,
+            'pagination': {
+                'current_page': page,
+                'total_pages': paginator.num_pages,
+                'total_count': paginator.count,
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous()
+            }
+        })
+        
+    except Exception as e:
+        return Response(
+            {'error': f'Erreur lors de la récupération: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def mark_notification_read(request, notification_id):
+    """Marquer une notification comme lue"""
+    try:
+        from .models import NotificationDesignation
+        
+        # Récupérer la notification
+        try:
+            notification = NotificationDesignation.objects.get(id=notification_id)
+        except NotificationDesignation.DoesNotExist:
+            return Response(
+                {'error': 'Notification non trouvée'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Vérifier que l'utilisateur est l'arbitre concerné ou un admin
+        if isinstance(request.user, Admin):
+            # Admin peut marquer n'importe quelle notification comme lue
+            pass
+        elif isinstance(request.user, Arbitre) and request.user.id == notification.arbitre.id:
+            # L'arbitre peut marquer ses propres notifications comme lues
+            pass
+        else:
+            return Response(
+                {'error': 'Accès refusé'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Marquer comme lue
+        notification.mark_as_read()
+        
+        return Response({
+            'success': True,
+            'message': 'Notification marquée comme lue',
+            'notification_id': notification.id,
+            'read_at': notification.read_at
+        })
+        
+    except Exception as e:
+        return Response(
+            {'error': f'Erreur lors de la mise à jour: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+# ============================================================================
+# VUES POUR LES EXCUSES D'ARBITRES
+# ============================================================================
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def create_excuse_arbitre(request):
+    """Créer une nouvelle excuse d'arbitre"""
+    if not isinstance(request.user, Arbitre):
+        return Response({
+            'success': False,
+            'message': 'Accès non autorisé - Seuls les arbitres peuvent créer des excuses',
+            'error_code': 'ACCESS_DENIED'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        serializer = ExcuseArbitreCreateSerializer(
+            data=request.data, 
+            context={'request': request}
+        )
+        
+        if serializer.is_valid():
+            # Créer l'excuse avec l'arbitre connecté
+            excuse = serializer.save(arbitre=request.user)
+            
+            # Sérialiser les données complètes pour la réponse
+            excuse_data = ExcuseArbitreDetailSerializer(excuse).data
+            
+            return Response({
+                'success': True,
+                'message': 'Excuse créée avec succès',
+                'excuse': excuse_data
+            }, status=status.HTTP_201_CREATED)
+        
+        # Gestion des erreurs de validation
+        error_details = {}
+        for field, errors in serializer.errors.items():
+            if isinstance(errors, list):
+                error_details[field] = errors[0] if errors else "Erreur de validation"
+            else:
+                error_details[field] = str(errors)
+        
+        return Response({
+            'success': False,
+            'message': 'Erreur de validation des données',
+            'errors': error_details,
+            'error_code': 'VALIDATION_ERROR'
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la création de l'excuse: {e}")
+        return Response({
+            'success': False,
+            'message': 'Erreur interne du serveur lors de la création',
+            'error': str(e),
+            'error_code': 'INTERNAL_ERROR'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def list_excuses_arbitre(request):
+    """Lister les excuses de l'arbitre connecté"""
+    if not isinstance(request.user, Arbitre):
+        return Response({
+            'success': False,
+            'message': 'Accès non autorisé - Seuls les arbitres peuvent consulter leurs excuses',
+            'error_code': 'ACCESS_DENIED'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        # Paramètres de pagination
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 20))
+        status_filter = request.GET.get('status', None)
+        
+        # Récupérer les excuses de l'arbitre
+        excuses = ExcuseArbitre.objects.filter(arbitre=request.user)
+        
+        # Filtrer par statut si spécifié
+        if status_filter:
+            excuses = excuses.filter(status=status_filter)
+        
+        # Trier par date de création (plus récentes en premier)
+        excuses = excuses.order_by('-created_at')
+        
+        # Pagination
+        paginator = Paginator(excuses, page_size)
+        page_obj = paginator.get_page(page)
+        
+        # Sérialiser les données
+        excuses_data = ExcuseArbitreListSerializer(page_obj, many=True).data
+        
+        return Response({
+            'success': True,
+            'excuses': excuses_data,
+            'pagination': {
+                'current_page': page,
+                'total_pages': paginator.num_pages,
+                'total_count': paginator.count,
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous()
+            }
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération des excuses: {e}")
+        return Response({
+            'success': False,
+            'message': 'Erreur lors de la récupération des excuses',
+            'error': str(e),
+            'error_code': 'INTERNAL_ERROR'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def detail_excuse_arbitre(request, excuse_id):
+    """Détails d'une excuse d'arbitre"""
+    if not isinstance(request.user, Arbitre):
+        return Response({
+            'success': False,
+            'message': 'Accès non autorisé',
+            'error_code': 'ACCESS_DENIED'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        # Récupérer l'excuse
+        try:
+            excuse = ExcuseArbitre.objects.get(id=excuse_id, arbitre=request.user)
+        except ExcuseArbitre.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Excuse non trouvée',
+                'error_code': 'NOT_FOUND'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Sérialiser les données
+        excuse_data = ExcuseArbitreDetailSerializer(excuse).data
+        
+        return Response({
+            'success': True,
+            'excuse': excuse_data
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération de l'excuse: {e}")
+        return Response({
+            'success': False,
+            'message': 'Erreur lors de la récupération de l\'excuse',
+            'error': str(e),
+            'error_code': 'INTERNAL_ERROR'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['PUT', 'PATCH'])
+@permission_classes([permissions.IsAuthenticated])
+def update_excuse_arbitre(request, excuse_id):
+    """Mettre à jour une excuse d'arbitre (seulement si en attente)"""
+    if not isinstance(request.user, Arbitre):
+        return Response({
+            'success': False,
+            'message': 'Accès non autorisé',
+            'error_code': 'ACCESS_DENIED'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        # Récupérer l'excuse
+        try:
+            excuse = ExcuseArbitre.objects.get(id=excuse_id, arbitre=request.user)
+        except ExcuseArbitre.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Excuse non trouvée',
+                'error_code': 'NOT_FOUND'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Vérifier que l'excuse peut être modifiée
+        if not excuse.can_be_modified:
+            return Response({
+                'success': False,
+                'message': 'Cette excuse ne peut plus être modifiée',
+                'error_code': 'CANNOT_MODIFY'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Mettre à jour l'excuse
+        serializer = ExcuseArbitreUpdateSerializer(
+            excuse, 
+            data=request.data, 
+            partial=True
+        )
+        
+        if serializer.is_valid():
+            excuse = serializer.save()
+            
+            # Sérialiser les données mises à jour
+            excuse_data = ExcuseArbitreDetailSerializer(excuse).data
+            
+            return Response({
+                'success': True,
+                'message': 'Excuse mise à jour avec succès',
+                'excuse': excuse_data,
+                'updated_fields': list(request.data.keys())
+            })
+        
+        # Gestion des erreurs de validation
+        error_details = {}
+        for field, errors in serializer.errors.items():
+            if isinstance(errors, list):
+                error_details[field] = errors[0] if errors else "Erreur de validation"
+            else:
+                error_details[field] = str(errors)
+        
+        return Response({
+            'success': False,
+            'message': 'Erreur de validation des données',
+            'errors': error_details,
+            'error_code': 'VALIDATION_ERROR'
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la mise à jour de l'excuse: {e}")
+        return Response({
+            'success': False,
+            'message': 'Erreur lors de la mise à jour de l\'excuse',
+            'error': str(e),
+            'error_code': 'INTERNAL_ERROR'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def cancel_excuse_arbitre(request, excuse_id):
+    """Annuler une excuse d'arbitre"""
+    if not isinstance(request.user, Arbitre):
+        return Response({
+            'success': False,
+            'message': 'Accès non autorisé',
+            'error_code': 'ACCESS_DENIED'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        # Récupérer l'excuse
+        try:
+            excuse = ExcuseArbitre.objects.get(id=excuse_id, arbitre=request.user)
+        except ExcuseArbitre.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Excuse non trouvée',
+                'error_code': 'NOT_FOUND'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Vérifier que l'excuse peut être annulée
+        if not excuse.can_be_cancelled:
+            return Response({
+                'success': False,
+                'message': 'Cette excuse ne peut plus être annulée',
+                'error_code': 'CANNOT_CANCEL'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Annuler l'excuse
+        excuse.annuler()
+        
+        # Sérialiser les données mises à jour
+        excuse_data = ExcuseArbitreDetailSerializer(excuse).data
+        
+        return Response({
+            'success': True,
+            'message': 'Excuse annulée avec succès',
+            'excuse': excuse_data
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de l'annulation de l'excuse: {e}")
+        return Response({
+            'success': False,
+            'message': 'Erreur lors de l\'annulation de l\'excuse',
+            'error': str(e),
+            'error_code': 'INTERNAL_ERROR'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
