@@ -99,15 +99,15 @@ class ArbitreRegistrationSerializer(serializers.ModelSerializer):
         model = Arbitre
         fields = [
             'phone_number', 'email', 'first_name', 'last_name',
-            'grade', 'address', 'birth_date', 'birth_place', 'cin',
-            'profile_photo', 'password', 'password_confirm', 'ligue_id'
+            'address', 'profile_photo', 'ligue_id', 'grade', 
+            'birth_date', 'birth_place', 'role', 'password', 'password_confirm'
         ]
         extra_kwargs = {
             'email': {'required': False},
             'address': {'required': False},
             'birth_place': {'required': False},
-            'cin': {'required': False},
             'profile_photo': {'required': False},
+            'birth_date': {'required': False},
         }
     
     def validate(self, data):
@@ -131,6 +131,15 @@ class ArbitreRegistrationSerializer(serializers.ModelSerializer):
             if grade not in valid_grades:
                 raise serializers.ValidationError({
                     'grade': f"Le grade '{grade}' n'est pas valide. Grades acceptés: {', '.join(valid_grades)}"
+                })
+        
+        # Valider le rôle
+        role = data.get('role')
+        if role:
+            valid_roles = ['arbitre', 'assistant']
+            if role not in valid_roles:
+                raise serializers.ValidationError({
+                    'role': f"Le rôle '{role}' n'est pas valide. Rôles acceptés: {', '.join(valid_roles)}"
                 })
         
         # Valider l'unicité du numéro de téléphone
@@ -168,10 +177,42 @@ class ArbitreRegistrationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """Créer un nouvel arbitre"""
         validated_data.pop('password_confirm')
-        validated_data.pop('ligue_id')  # Supprimer l'ID, on utilise l'objet ligue
+        ligue_id = validated_data.pop('ligue_id')
         password = validated_data.pop('password')
+        
+        # Normaliser le numéro de téléphone
+        phone_number = validated_data.get('phone_number')
+        if phone_number:
+            validated_data['phone_number'] = self._normalize_phone_number(phone_number)
+        
+        # Récupérer la ligue
+        try:
+            from .models import LigueArbitrage
+            ligue = LigueArbitrage.objects.get(id=ligue_id)
+            validated_data['ligue'] = ligue
+        except LigueArbitrage.DoesNotExist:
+            raise serializers.ValidationError("Ligue non trouvée")
+        
         arbitre = Arbitre.objects.create_user(password=password, **validated_data)
         return arbitre
+    
+    def _normalize_phone_number(self, phone_number):
+        """Normalise un numéro de téléphone tunisien"""
+        # Supprimer tous les espaces et caractères spéciaux
+        phone = ''.join(filter(str.isdigit, phone_number))
+        
+        # Si le numéro commence par 216, le garder tel quel
+        if phone.startswith('216'):
+            return phone
+        # Si le numéro commence par 0, remplacer par 216
+        elif phone.startswith('0'):
+            return '216' + phone[1:]
+        # Si le numéro a 8 chiffres, ajouter 216
+        elif len(phone) == 8:
+            return '216' + phone
+        # Sinon, retourner tel quel
+        else:
+            return phone
 
 class ArbitreLoginSerializer(serializers.Serializer):
     """Serializer pour la connexion des arbitres"""
@@ -213,7 +254,7 @@ class ArbitreProfileSerializer(serializers.ModelSerializer):
         model = Arbitre
         fields = [
             'id', 'phone_number', 'email', 'first_name', 'last_name',
-            'full_name', 'grade', 'ligue', 'ligue_nom',
+            'full_name', 'role', 'grade', 'ligue', 'ligue_nom',
             'address', 'birth_date', 'birth_place', 'cin',
             'profile_photo', 'date_joined', 'is_active', 'is_staff', 'is_superuser'
         ]
@@ -272,10 +313,42 @@ class CommissaireRegistrationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """Créer un nouveau commissaire"""
         validated_data.pop('password_confirm')
-        validated_data.pop('ligue_id')  # Supprimer l'ID, on utilise l'objet ligue
+        ligue_id = validated_data.pop('ligue_id')
         password = validated_data.pop('password')
+        
+        # Normaliser le numéro de téléphone
+        phone_number = validated_data.get('phone_number')
+        if phone_number:
+            validated_data['phone_number'] = self._normalize_phone_number(phone_number)
+        
+        # Récupérer la ligue
+        try:
+            from .models import LigueArbitrage
+            ligue = LigueArbitrage.objects.get(id=ligue_id)
+            validated_data['ligue'] = ligue
+        except LigueArbitrage.DoesNotExist:
+            raise serializers.ValidationError("Ligue non trouvée")
+        
         commissaire = Commissaire.objects.create_user(password=password, **validated_data)
         return commissaire
+    
+    def _normalize_phone_number(self, phone_number):
+        """Normalise un numéro de téléphone tunisien"""
+        # Supprimer tous les espaces et caractères spéciaux
+        phone = ''.join(filter(str.isdigit, phone_number))
+        
+        # Si le numéro commence par 216, le garder tel quel
+        if phone.startswith('216'):
+            return phone
+        # Si le numéro commence par 0, remplacer par 216
+        elif phone.startswith('0'):
+            return '216' + phone[1:]
+        # Si le numéro a 8 chiffres, ajouter 216
+        elif len(phone) == 8:
+            return '216' + phone
+        # Sinon, retourner tel quel
+        else:
+            return phone
 
 class CommissaireLoginSerializer(serializers.Serializer):
     """Serializer pour la connexion des commissaires"""
@@ -364,8 +437,32 @@ class AdminRegistrationSerializer(serializers.ModelSerializer):
         """Créer un nouvel administrateur"""
         validated_data.pop('password_confirm')
         password = validated_data.pop('password')
+        
+        # Normaliser le numéro de téléphone
+        phone_number = validated_data.get('phone_number')
+        if phone_number:
+            validated_data['phone_number'] = self._normalize_phone_number(phone_number)
+        
         admin = Admin.objects.create_user(password=password, **validated_data)
         return admin
+    
+    def _normalize_phone_number(self, phone_number):
+        """Normalise un numéro de téléphone tunisien"""
+        # Supprimer tous les espaces et caractères spéciaux
+        phone = ''.join(filter(str.isdigit, phone_number))
+        
+        # Si le numéro commence par 216, le garder tel quel
+        if phone.startswith('216'):
+            return phone
+        # Si le numéro commence par 0, remplacer par 216
+        elif phone.startswith('0'):
+            return '216' + phone[1:]
+        # Si le numéro a 8 chiffres, ajouter 216
+        elif len(phone) == 8:
+            return '216' + phone
+        # Sinon, retourner tel quel
+        else:
+            return phone
 
 class AdminLoginSerializer(serializers.Serializer):
     """Serializer pour la connexion des administrateurs"""

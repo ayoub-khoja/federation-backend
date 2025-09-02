@@ -28,6 +28,76 @@ from django.utils import timezone
 # FONCTIONS HELPER
 # ============================================================================
 
+def normalize_phone_number(phone_number):
+    """
+    Normalise un numéro de téléphone tunisien
+    """
+    # Supprimer tous les espaces et caractères spéciaux
+    phone = ''.join(filter(str.isdigit, phone_number))
+    
+    # Si le numéro commence par 216, le garder tel quel
+    if phone.startswith('216'):
+        return phone
+    # Si le numéro commence par 0, remplacer par 216
+    elif phone.startswith('0'):
+        return '216' + phone[1:]
+    # Si le numéro a 8 chiffres, ajouter 216
+    elif len(phone) == 8:
+        return '216' + phone
+    # Sinon, retourner tel quel
+    else:
+        return phone
+
+def check_phone_number_exists(phone_number):
+    """
+    Vérifie si un numéro de téléphone existe déjà dans la base de données
+    Retourne (exists, user_type, user_info)
+    """
+    normalized_phone = normalize_phone_number(phone_number)
+    
+    # Vérifier dans Arbitre
+    try:
+        arbitre = Arbitre.objects.get(phone_number=normalized_phone)
+        return True, 'arbitre', {
+            'id': arbitre.id,
+            'full_name': arbitre.get_full_name(),
+            'grade': arbitre.grade,
+            'ligue': arbitre.ligue.nom if arbitre.ligue else None,
+            'is_active': arbitre.is_active
+        }
+    except Arbitre.DoesNotExist:
+        pass
+    
+    # Vérifier dans Commissaire
+    try:
+        commissaire = Commissaire.objects.get(phone_number=normalized_phone)
+        return True, 'commissaire', {
+            'id': commissaire.id,
+            'full_name': commissaire.get_full_name(),
+            'grade': commissaire.grade,
+            'specialite': commissaire.specialite,
+            'ligue': commissaire.ligue.nom if commissaire.ligue else None,
+            'is_active': commissaire.is_active
+        }
+    except Commissaire.DoesNotExist:
+        pass
+    
+    # Vérifier dans Admin
+    try:
+        admin = Admin.objects.get(phone_number=normalized_phone)
+        return True, 'admin', {
+            'id': admin.id,
+            'full_name': admin.get_full_name(),
+            'user_type': admin.user_type,
+            'department': admin.department,
+            'position': admin.position,
+            'is_active': admin.is_active
+        }
+    except Admin.DoesNotExist:
+        pass
+    
+    return False, None, None
+
 def validate_jwt_admin(request):
     """
     Valide l'authentification JWT et retourne l'utilisateur admin
@@ -58,6 +128,59 @@ def validate_jwt_admin(request):
     except Exception as e:
         print(f"❌ Erreur lors de la validation JWT: {e}")
         return None, 'Token d\'authentification invalide'
+
+# ============================================================================
+# VÉRIFICATION DE NUMÉRO DE TÉLÉPHONE
+# ============================================================================
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def verify_phone_number(request):
+    """
+    Vérifie si un numéro de téléphone existe déjà dans la base de données
+    """
+    phone_number = request.data.get('phone_number')
+    
+    if not phone_number:
+        return Response({
+            'success': False,
+            'message': 'Le numéro de téléphone est requis',
+            'error_code': 'PHONE_REQUIRED'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        # Normaliser le numéro
+        normalized_phone = normalize_phone_number(phone_number)
+        
+        # Vérifier l'existence
+        exists, user_type, user_info = check_phone_number_exists(phone_number)
+        
+        if exists:
+            return Response({
+                'success': True,
+                'exists': True,
+                'message': f'Ce numéro de téléphone est déjà utilisé par un {user_type}',
+                'user_type': user_type,
+                'user_info': user_info,
+                'normalized_phone': normalized_phone,
+                'error_code': 'PHONE_EXISTS'
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'success': True,
+                'exists': False,
+                'message': 'Ce numéro de téléphone est disponible',
+                'normalized_phone': normalized_phone,
+                'error_code': 'PHONE_AVAILABLE'
+            }, status=status.HTTP_200_OK)
+            
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': 'Erreur lors de la vérification du numéro',
+            'error': str(e),
+            'error_code': 'VERIFICATION_ERROR'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # ============================================================================
 # AUTHENTIFICATION UNIFIÉE (pour mobile)
@@ -167,13 +290,32 @@ def unified_logout(request):
 @permission_classes([permissions.AllowAny])
 def arbitre_register(request):
     """Inscription d'un nouvel arbitre"""
+    phone_number = request.data.get('phone_number')
+    
+    # Vérifier d'abord si le numéro existe
+    if phone_number:
+        exists, user_type, user_info = check_phone_number_exists(phone_number)
+        if exists:
+            return Response({
+                'success': False,
+                'message': f'Ce numéro de téléphone est déjà utilisé par un {user_type}',
+                'error_code': 'PHONE_EXISTS',
+                'user_type': user_type,
+                'user_info': user_info
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
     serializer = ArbitreRegistrationSerializer(data=request.data)
     if serializer.is_valid():
         arbitre = serializer.save()
+        
+        # Sérialiser les données complètes de l'arbitre créé
+        from .serializers import ArbitreProfileSerializer
+        arbitre_data = ArbitreProfileSerializer(arbitre).data
+        
         return Response({
             'success': True,
             'message': 'Compte arbitre créé avec succès',
-            'arbitre_id': arbitre.id
+            'arbitre': arbitre_data
         }, status=status.HTTP_201_CREATED)
     
     # Améliorer la gestion des erreurs
@@ -373,6 +515,20 @@ def arbitre_update_profile(request):
 @permission_classes([permissions.AllowAny])
 def commissaire_register(request):
     """Inscription d'un nouveau commissaire"""
+    phone_number = request.data.get('phone_number')
+    
+    # Vérifier d'abord si le numéro existe
+    if phone_number:
+        exists, user_type, user_info = check_phone_number_exists(phone_number)
+        if exists:
+            return Response({
+                'success': False,
+                'message': f'Ce numéro de téléphone est déjà utilisé par un {user_type}',
+                'error_code': 'PHONE_EXISTS',
+                'user_type': user_type,
+                'user_info': user_info
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
     serializer = CommissaireRegistrationSerializer(data=request.data)
     if serializer.is_valid():
         commissaire = serializer.save()
@@ -444,6 +600,20 @@ def commissaire_update_profile(request):
 @permission_classes([permissions.AllowAny])
 def admin_register(request):
     """Inscription d'un nouvel administrateur"""
+    phone_number = request.data.get('phone_number')
+    
+    # Vérifier d'abord si le numéro existe
+    if phone_number:
+        exists, user_type, user_info = check_phone_number_exists(phone_number)
+        if exists:
+            return Response({
+                'success': False,
+                'message': f'Ce numéro de téléphone est déjà utilisé par un {user_type}',
+                'error_code': 'PHONE_EXISTS',
+                'user_type': user_type,
+                'user_info': user_info
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
     serializer = AdminRegistrationSerializer(data=request.data)
     if serializer.is_valid():
         admin = serializer.save()

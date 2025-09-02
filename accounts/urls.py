@@ -7,6 +7,11 @@ from . import views
 
 urlpatterns = [
     # ============================================================================
+    # VÉRIFICATION DE NUMÉRO DE TÉLÉPHONE
+    # ============================================================================
+    path('verify-phone/', views.verify_phone_number, name='verify_phone_number'),
+    
+    # ============================================================================
     # AUTHENTIFICATION UNIFIÉE (pour mobile)
     # ============================================================================
     path('auth/login/', views.unified_login, name='unified_login'),

@@ -94,6 +94,15 @@ class Arbitre(AbstractBaseUser, PermissionsMixin):
     )
     
     # Informations professionnelles
+    role = models.CharField(
+        max_length=20,
+        choices=[
+            ('arbitre', 'Arbitre'),
+            ('assistant', 'Assistant'),
+        ],
+        default='arbitre',
+        verbose_name="Rôle"
+    )
     grade = models.CharField(
         max_length=20,
         choices=[
