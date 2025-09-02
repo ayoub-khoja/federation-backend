@@ -22,7 +22,9 @@ urlpatterns = [
     # AUTHENTIFICATION ARBITRES
     # ============================================================================
     path('arbitres/register/', views.arbitre_register, name='arbitre_register'),
+    path('arbitres/register', views.arbitre_register, name='arbitre_register_no_slash'),
     path('arbitres/login/', views.arbitre_login, name='arbitre_login'),
+    path('arbitres/login', views.arbitre_login, name='arbitre_login_no_slash'),
     path('arbitres/profile/', views.arbitre_profile, name='arbitre_profile'),
     path('test-auth/', views.test_auth, name='test_auth'),
     path('arbitres/profile/update/', views.arbitre_update_profile, name='arbitre_update_profile'),
@@ -31,7 +33,9 @@ urlpatterns = [
     # AUTHENTIFICATION COMMISSAIRES
     # ============================================================================
     path('commissaires/register/', views.commissaire_register, name='commissaire_register'),
+    path('commissaires/register', views.commissaire_register, name='commissaire_register_no_slash'),
     path('commissaires/login/', views.commissaire_login, name='commissaire_login'),
+    path('commissaires/login', views.commissaire_login, name='commissaire_login_no_slash'),
     path('commissaires/profile/', views.commissaire_profile, name='commissaire_profile'),
     path('commissaires/profile/update/', views.commissaire_update_profile, name='commissaire_update_profile'),
     
@@ -39,7 +43,9 @@ urlpatterns = [
     # AUTHENTIFICATION ADMINISTRATEURS
     # ============================================================================
     path('admins/register/', views.admin_register, name='admin_register'),
+    path('admins/register', views.admin_register, name='admin_register_no_slash'),
     path('admins/login/', views.admin_login, name='admin_login'),
+    path('admins/login', views.admin_login, name='admin_login_no_slash'),
     path('admins/profile/', views.admin_profile, name='admin_profile'),
     path('admins/profile/update/', views.admin_update_profile, name='admin_update_profile'),
     
