@@ -10,6 +10,7 @@ urlpatterns = [
     # VÉRIFICATION DE NUMÉRO DE TÉLÉPHONE
     # ============================================================================
     path('verify-phone/', views.verify_phone_number, name='verify_phone_number'),
+    path('verify-phone', views.verify_phone_number, name='verify_phone_number_no_slash'),
     
     # ============================================================================
     # AUTHENTIFICATION UNIFIÉE (pour mobile)
