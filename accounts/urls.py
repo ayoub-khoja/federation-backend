@@ -110,5 +110,17 @@ urlpatterns = [
     path('arbitres/excuses/<int:excuse_id>/', views.detail_excuse_arbitre, name='detail_excuse_arbitre'),
     path('arbitres/excuses/<int:excuse_id>/update/', views.update_excuse_arbitre, name='update_excuse_arbitre'),
     path('arbitres/excuses/<int:excuse_id>/cancel/', views.cancel_excuse_arbitre, name='cancel_excuse_arbitre'),
+    
+    # ============================================================================
+# RÉINITIALISATION DE MOT DE PASSE AVEC OTP
+# ============================================================================
+path('password-reset/request/', views.request_password_reset, name='request_password_reset'),
+path('password-reset/request', views.request_password_reset, name='request_password_reset_no_slash'),
+path('password-reset/verify-otp/', views.verify_otp_code, name='verify_otp_code'),
+path('password-reset/verify-otp', views.verify_otp_code, name='verify_otp_code_no_slash'),
+path('password-reset/confirm/', views.confirm_password_reset, name='confirm_password_reset'),
+path('password-reset/confirm', views.confirm_password_reset, name='confirm_password_reset_no_slash'),
+path('password-reset/validate/<str:token>/', views.validate_reset_token, name='validate_reset_token'),
+path('password-reset/validate/<str:token>', views.validate_reset_token, name='validate_reset_token_no_slash'),
 ]
 

@@ -872,3 +872,232 @@ class ExcuseArbitre(models.Model):
         """Vérifier si l'excuse peut être annulée"""
         return self.status in ['en_attente', 'acceptee'] and not self.is_passee()
 
+# ============================================================================
+# MODÈLE POUR LA RÉINITIALISATION DE MOT DE PASSE
+# ============================================================================
+
+class PasswordResetToken(models.Model):
+    """Modèle pour les tokens de réinitialisation de mot de passe"""
+    
+    # Relations avec les utilisateurs (peut être un Arbitre, Commissaire ou Admin)
+    arbitre = models.ForeignKey(
+        Arbitre,
+        on_delete=models.CASCADE,
+        related_name='password_reset_tokens',
+        null=True,
+        blank=True,
+        verbose_name="Arbitre"
+    )
+    commissaire = models.ForeignKey(
+        Commissaire,
+        on_delete=models.CASCADE,
+        related_name='password_reset_tokens',
+        null=True,
+        blank=True,
+        verbose_name="Commissaire"
+    )
+    admin = models.ForeignKey(
+        Admin,
+        on_delete=models.CASCADE,
+        related_name='password_reset_tokens',
+        null=True,
+        blank=True,
+        verbose_name="Administrateur"
+    )
+    
+    # Token et métadonnées
+    token = models.CharField(max_length=255, unique=True, verbose_name="Token de réinitialisation")
+    otp_code = models.CharField(max_length=6, verbose_name="Code OTP")
+    email = models.EmailField(verbose_name="Adresse email")
+    
+    # Statut et timestamps
+    is_used = models.BooleanField(default=False, verbose_name="Token utilisé")
+    otp_verified = models.BooleanField(default=False, verbose_name="OTP vérifié")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
+    expires_at = models.DateTimeField(verbose_name="Date d'expiration")
+    used_at = models.DateTimeField(null=True, blank=True, verbose_name="Date d'utilisation")
+    otp_verified_at = models.DateTimeField(null=True, blank=True, verbose_name="Date de vérification OTP")
+    
+    # Informations de sécurité
+    ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name="Adresse IP")
+    user_agent = models.TextField(blank=True, null=True, verbose_name="User Agent")
+    
+    class Meta:
+        db_table = 'password_reset_tokens'
+        verbose_name = "Token de Réinitialisation"
+        verbose_name_plural = "Tokens de Réinitialisation"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['token']),
+            models.Index(fields=['email']),
+            models.Index(fields=['expires_at']),
+            models.Index(fields=['is_used']),
+        ]
+    
+    def __str__(self):
+        user_info = self.get_user_info()
+        return f"Token pour {user_info} - {self.email}"
+    
+    def get_user_info(self):
+        """Retourne les informations de l'utilisateur associé"""
+        if self.arbitre:
+            return f"Arbitre: {self.arbitre.get_full_name()}"
+        elif self.commissaire:
+            return f"Commissaire: {self.commissaire.get_full_name()}"
+        elif self.admin:
+            return f"Admin: {self.admin.get_full_name()}"
+        return "Utilisateur inconnu"
+    
+    def get_user(self):
+        """Retourne l'utilisateur associé (Arbitre, Commissaire ou Admin)"""
+        if self.arbitre:
+            return self.arbitre
+        elif self.commissaire:
+            return self.commissaire
+        elif self.admin:
+            return self.admin
+        return None
+    
+    def is_expired(self):
+        """Vérifier si le token a expiré"""
+        return timezone.now() > self.expires_at
+    
+    def is_valid(self):
+        """Vérifier si le token est valide (non utilisé et non expiré)"""
+        return not self.is_used and not self.is_expired()
+    
+    def is_otp_valid(self):
+        """Vérifier si le token est valide pour la vérification OTP"""
+        return not self.is_used and not self.is_expired() and not self.otp_verified
+    
+    def mark_as_used(self):
+        """Marquer le token comme utilisé"""
+        self.is_used = True
+        self.used_at = timezone.now()
+        self.save(update_fields=['is_used', 'used_at'])
+    
+    def mark_otp_as_verified(self):
+        """Marquer l'OTP comme vérifié"""
+        self.otp_verified = True
+        self.otp_verified_at = timezone.now()
+        self.save(update_fields=['otp_verified', 'otp_verified_at'])
+    
+    def clean(self):
+        """Validation: un token doit être associé à exactement un utilisateur"""
+        from django.core.exceptions import ValidationError
+        
+        user_count = sum([
+            bool(self.arbitre),
+            bool(self.commissaire),
+            bool(self.admin)
+        ])
+        
+        if user_count != 1:
+            raise ValidationError("Un token de réinitialisation doit être associé à exactement un utilisateur.")
+    
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def create_for_user(cls, user, email, ip_address=None, user_agent=None):
+        """Créer un nouveau token de réinitialisation pour un utilisateur"""
+        import secrets
+        import random
+        from django.conf import settings
+        from datetime import timedelta
+        
+        # Générer un token sécurisé
+        token = secrets.token_urlsafe(32)
+        
+        # Générer un code OTP à 6 chiffres
+        otp_code = str(random.randint(100000, 999999))
+        
+        # Calculer la date d'expiration (5 minutes par défaut pour la sécurité)
+        expiry_minutes = getattr(settings, 'PASSWORD_RESET_SETTINGS', {}).get('TOKEN_EXPIRY_MINUTES', 5)
+        expires_at = timezone.now() + timedelta(minutes=expiry_minutes)
+        
+        # Déterminer le type d'utilisateur et créer le token
+        token_data = {
+            'token': token,
+            'otp_code': otp_code,
+            'email': email,
+            'expires_at': expires_at,
+            'ip_address': ip_address,
+            'user_agent': user_agent,
+        }
+        
+        if isinstance(user, Arbitre):
+            token_data['arbitre'] = user
+        elif isinstance(user, Commissaire):
+            token_data['commissaire'] = user
+        elif isinstance(user, Admin):
+            token_data['admin'] = user
+        else:
+            raise ValueError("Type d'utilisateur non supporté")
+        
+        # Désactiver tous les tokens précédents pour cet utilisateur
+        cls.objects.filter(
+            **{type(user).__name__.lower(): user},
+            is_used=False
+        ).update(is_used=True, used_at=timezone.now())
+        
+        return cls.objects.create(**token_data)
+    
+    @classmethod
+    def get_valid_token(cls, token):
+        """Récupérer un token valide"""
+        try:
+            token_obj = cls.objects.get(token=token)
+            if token_obj.is_valid():
+                return token_obj
+            return None
+        except cls.DoesNotExist:
+            return None
+    
+    @classmethod
+    def get_valid_otp_token(cls, token):
+        """Récupérer un token valide pour la vérification OTP"""
+        try:
+            token_obj = cls.objects.get(token=token)
+            if token_obj.is_otp_valid():
+                return token_obj
+            return None
+        except cls.DoesNotExist:
+            return None
+    
+    @classmethod
+    def check_rate_limit(cls, email):
+        """Vérifier la limitation de taux pour un email"""
+        from django.conf import settings
+        from datetime import timedelta
+        
+        max_attempts = getattr(settings, 'PASSWORD_RESET_SETTINGS', {}).get('MAX_ATTEMPTS_PER_HOUR', 3)
+        
+        # Compter les tentatives dans la dernière heure
+        one_hour_ago = timezone.now() - timedelta(hours=1)
+        recent_attempts = cls.objects.filter(
+            email=email,
+            created_at__gte=one_hour_ago
+        ).count()
+        
+        return recent_attempts < max_attempts
+    
+    @classmethod
+    def cleanup_old_tokens(cls):
+        """Nettoyer automatiquement les anciens tokens"""
+        from django.conf import settings
+        from datetime import timedelta
+        
+        cleanup_hours = getattr(settings, 'PASSWORD_RESET_SETTINGS', {}).get('AUTO_CLEANUP_HOURS', 1)
+        cutoff_time = timezone.now() - timedelta(hours=cleanup_hours)
+        
+        # Supprimer les tokens expirés ou anciens
+        from django.db import models as db_models
+        deleted_count = cls.objects.filter(
+            db_models.Q(expires_at__lt=timezone.now()) | 
+            db_models.Q(created_at__lt=cutoff_time)
+        ).delete()[0]
+        
+        return deleted_count
+

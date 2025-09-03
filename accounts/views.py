@@ -21,6 +21,13 @@ from .serializers import (
     ExcuseArbitreCreateSerializer, ExcuseArbitreListSerializer, 
     ExcuseArbitreDetailSerializer, ExcuseArbitreUpdateSerializer
 )
+from .password_reset_serializers import (
+    PasswordResetRequestSerializer, 
+    PasswordResetConfirmSerializer,
+    PasswordResetOTPVerifySerializer,
+    PasswordResetConfirmWithOTPSerializer
+)
+from .email_service import PasswordResetEmailService
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from .models import PushSubscription
@@ -2215,6 +2222,330 @@ def cancel_excuse_arbitre(request, excuse_id):
         return Response({
             'success': False,
             'message': 'Erreur lors de l\'annulation de l\'excuse',
+            'error': str(e),
+            'error_code': 'INTERNAL_ERROR'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# ============================================================================
+# VUES POUR LA RÉINITIALISATION DE MOT DE PASSE AVEC OTP
+# ============================================================================
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def request_password_reset(request):
+    """Demander une réinitialisation de mot de passe avec OTP"""
+    try:
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            
+            # Trouver l'utilisateur par email
+            user = None
+            user_type = None
+            
+            # Chercher dans Arbitre
+            try:
+                user = Arbitre.objects.get(email=email, is_active=True)
+                user_type = 'arbitre'
+            except Arbitre.DoesNotExist:
+                pass
+            
+            # Chercher dans Commissaire
+            if not user:
+                try:
+                    user = Commissaire.objects.get(email=email, is_active=True)
+                    user_type = 'commissaire'
+                except Commissaire.DoesNotExist:
+                    pass
+            
+            # Chercher dans Admin
+            if not user:
+                try:
+                    user = Admin.objects.get(email=email, is_active=True)
+                    user_type = 'admin'
+                except Admin.DoesNotExist:
+                    pass
+            
+            if not user:
+                return Response({
+                    'success': False,
+                    'message': 'Aucun compte actif trouvé avec cette adresse email.',
+                    'error_code': 'USER_NOT_FOUND'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Vérifier la limitation de taux
+            from .models import PasswordResetToken
+            if not PasswordResetToken.check_rate_limit(email):
+                return Response({
+                    'success': False,
+                    'message': 'Trop de tentatives de réinitialisation. Veuillez attendre avant de réessayer.',
+                    'error_code': 'RATE_LIMIT_EXCEEDED'
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            
+            # Nettoyer les anciens tokens avant de créer un nouveau
+            PasswordResetToken.cleanup_old_tokens()
+            
+            # Récupérer l'IP et User-Agent pour la sécurité
+            ip_address = request.META.get('REMOTE_ADDR')
+            user_agent = request.META.get('HTTP_USER_AGENT', '')
+            
+            # Créer le token avec OTP
+            reset_token = PasswordResetToken.create_for_user(
+                user=user,
+                email=email,
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
+            
+            # Envoyer l'email avec OTP
+            email_sent = PasswordResetEmailService.send_password_reset_email(
+                user=user,
+                token=reset_token,
+                request=request
+            )
+            
+            if email_sent:
+                return Response({
+                    'success': True,
+                    'message': f'Un email de réinitialisation avec code OTP a été envoyé à {email}',
+                    'user_type': user_type,
+                    'expires_in_minutes': 5,  # Durée de validité du token
+                    'instructions': 'Vérifiez votre email pour le code OTP et le lien de réinitialisation'
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'success': False,
+                    'message': 'Erreur lors de l\'envoi de l\'email. Veuillez réessayer plus tard.',
+                    'error_code': 'EMAIL_SEND_ERROR'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Gestion des erreurs de validation
+        error_details = {}
+        for field, errors in serializer.errors.items():
+            if isinstance(errors, list):
+                error_details[field] = errors[0] if errors else "Erreur de validation"
+            else:
+                error_details[field] = str(errors)
+        
+        return Response({
+            'success': False,
+            'message': 'Erreur de validation des données',
+            'errors': error_details,
+            'error_code': 'VALIDATION_ERROR'
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la demande de réinitialisation: {e}")
+        return Response({
+            'success': False,
+            'message': 'Erreur interne du serveur',
+            'error': str(e),
+            'error_code': 'INTERNAL_ERROR'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def verify_otp_code(request):
+    """Vérifier le code OTP"""
+    try:
+        serializer = PasswordResetOTPVerifySerializer(data=request.data)
+        
+        if serializer.is_valid():
+            token = serializer.validated_data['token']
+            otp_code = serializer.validated_data['otp_code']
+            
+            # Récupérer le token valide pour OTP
+            from .models import PasswordResetToken
+            reset_token = PasswordResetToken.get_valid_otp_token(token)
+            
+            if not reset_token:
+                return Response({
+                    'success': False,
+                    'message': 'Token invalide, expiré ou OTP déjà vérifié. Veuillez demander un nouveau lien de réinitialisation.',
+                    'error_code': 'INVALID_TOKEN'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Vérifier le code OTP
+            if reset_token.otp_code != otp_code:
+                return Response({
+                    'success': False,
+                    'message': 'Code OTP incorrect. Veuillez vérifier le code reçu par email.',
+                    'error_code': 'INVALID_OTP'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Marquer l'OTP comme vérifié
+            reset_token.mark_otp_as_verified()
+            
+            # Récupérer l'utilisateur
+            user = reset_token.get_user()
+            user_type = type(user).__name__.lower()
+            
+            return Response({
+                'success': True,
+                'message': 'Code OTP vérifié avec succès. Vous pouvez maintenant réinitialiser votre mot de passe.',
+                'user_type': user_type,
+                'user_email': user.email,
+                'next_step': 'Vous pouvez maintenant définir votre nouveau mot de passe'
+            }, status=status.HTTP_200_OK)
+        
+        # Gestion des erreurs de validation
+        error_details = {}
+        for field, errors in serializer.errors.items():
+            if isinstance(errors, list):
+                error_details[field] = errors[0] if errors else "Erreur de validation"
+            else:
+                error_details[field] = str(errors)
+        
+        return Response({
+            'success': False,
+            'message': 'Erreur de validation des données',
+            'errors': error_details,
+            'error_code': 'VALIDATION_ERROR'
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la vérification OTP: {e}")
+        return Response({
+            'success': False,
+            'message': 'Erreur interne du serveur',
+            'error': str(e),
+            'error_code': 'INTERNAL_ERROR'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def confirm_password_reset(request):
+    """Confirmer la réinitialisation de mot de passe avec OTP vérifié"""
+    try:
+        serializer = PasswordResetConfirmWithOTPSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            token = serializer.validated_data['token']
+            new_password = serializer.validated_data['new_password']
+            
+            # Récupérer le token valide avec OTP vérifié
+            from .models import PasswordResetToken
+            reset_token = PasswordResetToken.get_valid_token(token)
+            
+            if not reset_token:
+                return Response({
+                    'success': False,
+                    'message': 'Token invalide ou expiré. Veuillez demander un nouveau lien de réinitialisation.',
+                    'error_code': 'INVALID_TOKEN'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not reset_token.otp_verified:
+                return Response({
+                    'success': False,
+                    'message': 'Le code OTP n\'a pas été vérifié. Veuillez d\'abord vérifier votre code OTP.',
+                    'error_code': 'OTP_NOT_VERIFIED'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Récupérer l'utilisateur
+            user = reset_token.get_user()
+            if not user:
+                return Response({
+                    'success': False,
+                    'message': 'Utilisateur non trouvé.',
+                    'error_code': 'USER_NOT_FOUND'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Vérifier que l'utilisateur est toujours actif
+            if not user.is_active:
+                return Response({
+                    'success': False,
+                    'message': 'Ce compte a été désactivé.',
+                    'error_code': 'ACCOUNT_DISABLED'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Changer le mot de passe
+            user.set_password(new_password)
+            user.save()
+            
+            # Marquer le token comme utilisé
+            reset_token.mark_as_used()
+            
+            # Déterminer le type d'utilisateur
+            user_type = type(user).__name__.lower()
+            
+            return Response({
+                'success': True,
+                'message': 'Mot de passe réinitialisé avec succès. Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.',
+                'user_type': user_type,
+                'user_email': user.email
+            }, status=status.HTTP_200_OK)
+        
+        # Gestion des erreurs de validation
+        error_details = {}
+        for field, errors in serializer.errors.items():
+            if isinstance(errors, list):
+                error_details[field] = errors[0] if errors else "Erreur de validation"
+            else:
+                error_details[field] = str(errors)
+        
+        return Response({
+            'success': False,
+            'message': 'Erreur de validation des données',
+            'errors': error_details,
+            'error_code': 'VALIDATION_ERROR'
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la confirmation de réinitialisation: {e}")
+        return Response({
+            'success': False,
+            'message': 'Erreur interne du serveur',
+            'error': str(e),
+            'error_code': 'INTERNAL_ERROR'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def validate_reset_token(request, token):
+    """Valider un token de réinitialisation (pour vérifier s'il est valide avant d'afficher le formulaire)"""
+    try:
+        from .models import PasswordResetToken
+        
+        reset_token = PasswordResetToken.get_valid_token(token)
+        
+        if not reset_token:
+            return Response({
+                'success': False,
+                'message': 'Token invalide ou expiré',
+                'error_code': 'INVALID_TOKEN'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Récupérer l'utilisateur
+        user = reset_token.get_user()
+        if not user or not user.is_active:
+            return Response({
+                'success': False,
+                'message': 'Utilisateur non trouvé ou compte désactivé',
+                'error_code': 'USER_NOT_FOUND'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Déterminer le type d'utilisateur
+        user_type = type(user).__name__.lower()
+        
+        return Response({
+            'success': True,
+            'message': 'Token valide',
+            'user_info': {
+                'email': user.email,
+                'user_type': user_type,
+                'user_name': user.get_full_name()
+            },
+            'expires_at': reset_token.expires_at,
+            'otp_verified': reset_token.otp_verified,
+            'next_step': 'Vérifiez votre code OTP' if not reset_token.otp_verified else 'Définissez votre nouveau mot de passe'
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la validation du token: {e}")
+        return Response({
+            'success': False,
+            'message': 'Erreur interne du serveur',
             'error': str(e),
             'error_code': 'INTERNAL_ERROR'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

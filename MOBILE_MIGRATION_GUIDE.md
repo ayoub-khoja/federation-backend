@@ -509,3 +509,5 @@ def fcm_monitoring_dashboard(request):
 
 🎉 **Une fois la migration terminée, vous bénéficierez d'un système de notifications plus fiable, plus rapide et plus facile à maintenir !**
 
+
+

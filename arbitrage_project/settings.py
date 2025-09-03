@@ -246,3 +246,29 @@ FCM_NOTIFICATION_SETTINGS = {
     'DEFAULT_BADGE': 1,
     'CLEANUP_INACTIVE_DAYS': 30,  # Jours avant de marquer un token comme inactif
 }
+
+# ============================================================================
+# CONFIGURATION EMAIL SMTP GMAIL
+# ============================================================================
+
+# Configuration SMTP Gmail pour l'envoi d'emails
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
+
+# Configuration des emails (à remplacer par vos vraies valeurs)
+EMAIL_HOST_USER = 'ayoubramezkhoja2003@gmail.com'  # Votre adresse Gmail
+EMAIL_HOST_PASSWORD = 'ewcc dfah pbhq cigi'  # Mot de passe d'application Gmail (16 caractères)
+DEFAULT_FROM_EMAIL = 'ayoubramezkhoja2003@gmail.com'  # Email expéditeur par défaut
+
+# Configuration pour les emails de réinitialisation de mot de passe
+PASSWORD_RESET_SETTINGS = {
+    'TOKEN_EXPIRY_MINUTES': 5,  # Durée de validité du token en minutes (sécurité optimale)
+    'EMAIL_SUBJECT_PREFIX': '[Fédération Tunisienne de Football] ',
+    'FRONTEND_RESET_URL': 'http://localhost:3000/reset-password/',  # URL de votre frontend (à adapter selon votre environnement)
+    'EMAIL_TEMPLATE_NAME': 'password_reset_email.html',
+    'MAX_ATTEMPTS_PER_HOUR': 20,  # Maximum 20 tentatives par email par heure
+    'AUTO_CLEANUP_HOURS': 1,  # Nettoyer les anciens tokens après 1 heure
+}
