@@ -264,10 +264,21 @@ EMAIL_HOST_PASSWORD = 'ewcc dfah pbhq cigi'  # Mot de passe d'application Gmail 
 DEFAULT_FROM_EMAIL = 'ayoubramezkhoja2003@gmail.com'  # Email expéditeur par défaut
 
 # Configuration pour les emails de réinitialisation de mot de passe
+# Configuration dynamique selon l'environnement
+import os
+
+# Déterminer l'URL du frontend selon l'environnement
+if os.environ.get('DJANGO_ENV') == 'production' or not DEBUG:
+    # Production (Vercel)
+    FRONTEND_RESET_URL = 'https://federation-mobile.vercel.app/reset-password/'
+else:
+    # Développement local
+    FRONTEND_RESET_URL = 'http://localhost:3000/reset-password/'
+
 PASSWORD_RESET_SETTINGS = {
     'TOKEN_EXPIRY_MINUTES': 5,  # Durée de validité du token en minutes (sécurité optimale)
     'EMAIL_SUBJECT_PREFIX': '[Fédération Tunisienne de Football] ',
-    'FRONTEND_RESET_URL': 'http://localhost:3000/reset-password/',  # URL de votre frontend (à adapter selon votre environnement)
+    'FRONTEND_RESET_URL': FRONTEND_RESET_URL,  # URL dynamique selon l'environnement
     'EMAIL_TEMPLATE_NAME': 'password_reset_email.html',
     'MAX_ATTEMPTS_PER_HOUR': 20,  # Maximum 20 tentatives par email par heure
     'AUTO_CLEANUP_HOURS': 1,  # Nettoyer les anciens tokens après 1 heure
