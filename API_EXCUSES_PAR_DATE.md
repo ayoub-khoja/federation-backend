@@ -200,3 +200,5 @@ print(response.json())
 - **Suivi:** Utiliser les excuses en cours pour le suivi quotidien
 - **Historique:** Utiliser les excuses passées pour l'analyse historique
 - **Rapports:** Générer des rapports par période en utilisant différentes dates de référence
+
+

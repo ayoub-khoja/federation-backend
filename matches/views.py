@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 from datetime import datetime, timedelta
 
-from .models import Match, MatchEvent, Designation, TypeMatch, Categorie, ExcuseArbitre
+from .models import Match, MatchEvent, Designation, TypeMatch, Categorie, ExcuseArbitre, TarificationMatch
 from .serializers import (
     MatchSerializer,
     MatchCreateSerializer,
@@ -22,7 +22,11 @@ from .serializers import (
     CategorieSerializer,
     ExcuseArbitreSerializer,
     ExcuseArbitreCreateSerializer,
-    ExcuseArbitreListSerializer
+    ExcuseArbitreListSerializer,
+    TarificationMatchSerializer,
+    TarificationMatchListSerializer,
+    TarificationMatchCreateSerializer,
+    TarificationMatchUpdateSerializer
 )
 
 class MatchListCreateView(generics.ListCreateAPIView):
@@ -906,4 +910,157 @@ def excuses_a_venir_par_date(request):
         'date_cible': target_date.strftime('%Y-%m-%d'),
         'excuses_a_venir': serializer.data
     })
+
+
+# ==================== VUES POUR LA TARIFICATION DES MATCHS ====================
+
+class TarificationMatchListView(generics.ListAPIView):
+    """Vue pour lister toutes les tarifications de matchs"""
+    queryset = TarificationMatch.objects.all()
+    serializer_class = TarificationMatchListSerializer
+    permission_classes = [permissions.AllowAny]
+    
+    def get_queryset(self):
+        """Filtrer les tarifications selon les paramètres"""
+        queryset = TarificationMatch.objects.all()
+        
+        # Filtres optionnels
+        competition = self.request.query_params.get('competition')
+        division = self.request.query_params.get('division')
+        type_match = self.request.query_params.get('type_match')
+        role = self.request.query_params.get('role')
+        is_active = self.request.query_params.get('is_active')
+        
+        if competition:
+            queryset = queryset.filter(competition=competition)
+        if division:
+            queryset = queryset.filter(division=division)
+        if type_match:
+            queryset = queryset.filter(type_match=type_match)
+        if role:
+            queryset = queryset.filter(role=role)
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        
+        return queryset.order_by('competition', 'division', 'type_match', 'role')
+
+
+class TarificationMatchDetailView(generics.RetrieveAPIView):
+    """Vue pour récupérer une tarification spécifique"""
+    queryset = TarificationMatch.objects.all()
+    serializer_class = TarificationMatchSerializer
+    permission_classes = [permissions.AllowAny]
+
+
+class TarificationMatchCreateView(generics.CreateAPIView):
+    """Vue pour créer une nouvelle tarification"""
+    queryset = TarificationMatch.objects.all()
+    serializer_class = TarificationMatchCreateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def perform_create(self, serializer):
+        """Créer une nouvelle tarification"""
+        serializer.save()
+
+
+class TarificationMatchUpdateView(generics.RetrieveUpdateDestroyAPIView):
+    """Vue pour modifier/supprimer une tarification"""
+    queryset = TarificationMatch.objects.all()
+    serializer_class = TarificationMatchUpdateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_serializer_class(self):
+        """Retourner le bon serializer selon l'action"""
+        if self.request.method in ['PUT', 'PATCH']:
+            return TarificationMatchUpdateSerializer
+        return TarificationMatchSerializer
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def tarification_by_competition(request, competition):
+    """Récupérer toutes les tarifications d'une compétition"""
+    try:
+        tarifications = TarificationMatch.objects.filter(
+            competition=competition,
+            is_active=True
+        ).order_by('division', 'type_match', 'role')
+        
+        serializer = TarificationMatchListSerializer(tarifications, many=True)
+        
+        return Response({
+            'success': True,
+            'message': f'Tarifications trouvées pour {competition}',
+            'competition': competition,
+            'count': tarifications.count(),
+            'tarifications': serializer.data
+        })
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'Erreur lors de la récupération des tarifications: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def tarification_by_type_match(request, competition, type_match):
+    """Récupérer les tarifications d'un type de match spécifique"""
+    try:
+        tarifications = TarificationMatch.objects.filter(
+            competition=competition,
+            type_match=type_match,
+            is_active=True
+        ).order_by('division', 'role')
+        
+        serializer = TarificationMatchListSerializer(tarifications, many=True)
+        
+        return Response({
+            'success': True,
+            'message': f'Tarifications trouvées pour {competition} - {type_match}',
+            'competition': competition,
+            'type_match': type_match,
+            'count': tarifications.count(),
+            'tarifications': serializer.data
+        })
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'Erreur lors de la récupération des tarifications: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def tarification_by_role(request, competition, type_match, role):
+    """Récupérer la tarification d'un rôle spécifique"""
+    try:
+        tarification = TarificationMatch.objects.get(
+            competition=competition,
+            type_match=type_match,
+            role=role,
+            is_active=True
+        )
+        
+        serializer = TarificationMatchSerializer(tarification)
+        
+        return Response({
+            'success': True,
+            'message': 'Tarification trouvée',
+            'tarification': serializer.data
+        })
+        
+    except TarificationMatch.DoesNotExist:
+        return Response({
+            'success': False,
+            'message': 'Tarification non trouvée'
+        }, status=status.HTTP_404_NOT_FOUND)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'Erreur lors de la récupération de la tarification: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

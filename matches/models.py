@@ -386,6 +386,130 @@ class Designation(models.Model):
         self.save()
 
 
+class TarificationMatch(models.Model):
+    """Modèle pour les tarifs des matchs selon le type et le rôle"""
+    
+    # Types de compétition
+    COMPETITION_CHOICES = [
+        ('championnat', 'Championnat'),
+        ('coupe_tunisie_seniors', 'Coupe de Tunisie Seniors'),
+        ('coupe_tunisie_jeunes', 'Coupe de Tunisie Jeunes'),
+        ('super_coupe', 'Super Coupe de Tunisie'),
+        ('matchs_amicaux', 'Matchs Amicaux'),
+    ]
+    
+    # Divisions/Catégories
+    DIVISION_CHOICES = [
+        ('seniors', 'Seniors'),
+        ('jeunes', 'Jeunes'),
+        ('feminin', 'Féminin'),
+        ('cadettes', 'Cadettes'),
+    ]
+    
+    # Types de match
+    TYPE_MATCH_CHOICES = [
+        # Championnat
+        ('ligue1', 'Ligue 1'),
+        ('ligue2', 'Ligue 2'),
+        ('c1', 'C1'),
+        ('c2', 'C2'),
+        ('ff', 'FF'),
+        ('reg', 'Régional'),
+        # Coupe de Tunisie Seniors
+        ('1_8', '1/8 de finale'),
+        ('1_4', '1/4 de finale'),
+        ('1_2', '1/2 de finale'),
+        ('finale', 'Finale'),
+        # Coupe de Tunisie Jeunes
+        ('u21_u19', 'U21/U19'),
+        ('u17_u16_u15_u14', 'U17/U16/U15/U14'),
+        ('feminin_cadettes', 'Féminin Cadettes'),
+        # Super Coupe
+        ('super_coupe_seniors', 'Super Coupe Seniors'),
+        # Matchs Amicaux
+        ('seniors_amical', 'Seniors Amical'),
+        ('u21_u19_amical', 'U21/U19 Amical'),
+        ('u15_u14_amical', 'U15/U14 Amical'),
+        ('eq_nat_vs_club_seniors', 'Équipe Nationale vs Club Seniors'),
+        ('eq_nat_vs_club_u21_u19', 'Équipe Nationale vs Club U21/U19'),
+        ('eq_nat_vs_club_u15_u14', 'Équipe Nationale vs Club U15/U14'),
+    ]
+    
+    # Rôles d'arbitrage
+    ROLE_CHOICES = [
+        ('arbitre', 'Arbitre'),
+        ('assistant', 'Assistant'),
+        ('4eme_arbitre', '4ème Arbitre'),
+        ('commissaire', 'Commissaire'),
+    ]
+    
+    # Champs principaux
+    competition = models.CharField(
+        max_length=50,
+        choices=COMPETITION_CHOICES,
+        verbose_name="Compétition"
+    )
+    
+    division = models.CharField(
+        max_length=20,
+        choices=DIVISION_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name="Division"
+    )
+    
+    type_match = models.CharField(
+        max_length=50,
+        choices=TYPE_MATCH_CHOICES,
+        verbose_name="Type de match"
+    )
+    
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        verbose_name="Rôle"
+    )
+    
+    # Tarif en dinars tunisiens
+    tarif = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        verbose_name="Tarif (TND)"
+    )
+    
+    # Devise (par défaut TND)
+    devise = models.CharField(
+        max_length=3,
+        default='TND',
+        verbose_name="Devise"
+    )
+    
+    # Statut actif/inactif
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Actif"
+    )
+    
+    # Métadonnées
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Créé le")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Modifié le")
+    
+    class Meta:
+        verbose_name = "Tarification de match"
+        verbose_name_plural = "Tarifications de matchs"
+        unique_together = ['competition', 'division', 'type_match', 'role']
+        ordering = ['competition', 'division', 'type_match', 'role']
+    
+    def __str__(self):
+        division_str = f" - {self.get_division_display()}" if self.division else ""
+        return f"{self.get_competition_display()}{division_str} - {self.get_type_match_display()} - {self.get_role_display()}: {self.tarif} {self.devise}"
+    
+    @property
+    def tarif_formatted(self):
+        """Retourne le tarif formaté avec la devise"""
+        return f"{self.tarif} {self.devise}"
+
+
 class ExcuseArbitre(models.Model):
     """Modèle pour les excuses d'arbitres"""
     

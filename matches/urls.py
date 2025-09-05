@@ -50,6 +50,17 @@ urlpatterns = [
     path('excuses/passees/', views.excuses_passees_par_date, name='excuses_passees_par_date'),
     path('excuses/en-cours/', views.excuses_en_cours_par_date, name='excuses_en_cours_par_date'),
     path('excuses/a-venir/', views.excuses_a_venir_par_date, name='excuses_a_venir_par_date'),
+    
+    # ===== TARIFICATION DES MATCHS =====
+    path('tarification/', views.TarificationMatchListView.as_view(), name='tarification_list'),
+    path('tarification/<int:pk>/', views.TarificationMatchDetailView.as_view(), name='tarification_detail'),
+    path('tarification/create/', views.TarificationMatchCreateView.as_view(), name='tarification_create'),
+    path('tarification/<int:pk>/update/', views.TarificationMatchUpdateView.as_view(), name='tarification_update'),
+    
+    # ===== TARIFICATION PAR FILTRES =====
+    path('tarification/competition/<str:competition>/', views.tarification_by_competition, name='tarification_by_competition'),
+    path('tarification/competition/<str:competition>/type/<str:type_match>/', views.tarification_by_type_match, name='tarification_by_type_match'),
+    path('tarification/competition/<str:competition>/type/<str:type_match>/role/<str:role>/', views.tarification_by_role, name='tarification_by_role'),
 ]
 
 

@@ -3,7 +3,7 @@ Configuration de l'interface d'administration pour les matchs
 """
 from django.contrib import admin
 from django.contrib import messages
-from .models import Match, MatchEvent, Designation, TypeMatch, Categorie, ExcuseArbitre
+from .models import Match, MatchEvent, Designation, TypeMatch, Categorie, ExcuseArbitre, TarificationMatch
 
 @admin.register(Match)
 class MatchAdmin(admin.ModelAdmin):
@@ -274,4 +274,44 @@ class ExcuseArbitreAdmin(admin.ModelAdmin):
             return obj.cause[:50] + "..."
         return obj.cause
     cause_short.short_description = "Cause"
+
+
+@admin.register(TarificationMatch)
+class TarificationMatchAdmin(admin.ModelAdmin):
+    """Interface d'administration pour les tarifications de matchs"""
+    
+    list_display = [
+        'competition', 'division', 'type_match', 'role', 
+        'tarif_formatted', 'is_active', 'created_at'
+    ]
+    
+    list_filter = [
+        'competition', 'division', 'type_match', 'role', 
+        'is_active', 'created_at'
+    ]
+    
+    search_fields = [
+        'competition', 'division', 'type_match', 'role'
+    ]
+    
+    ordering = ['competition', 'division', 'type_match', 'role']
+    
+    list_editable = ['is_active']
+    
+    fieldsets = (
+        ('Compétition et division', {
+            'fields': ('competition', 'division')
+        }),
+        ('Type de match et rôle', {
+            'fields': ('type_match', 'role')
+        }),
+        ('Tarification', {
+            'fields': ('tarif', 'devise', 'is_active')
+        }),
+    )
+    
+    readonly_fields = ['created_at', 'updated_at']
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request)
 

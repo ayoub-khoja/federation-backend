@@ -3,7 +3,7 @@ Serializers pour l'API des matchs
 """
 from rest_framework import serializers
 from .models import Match, MatchEvent, TypeMatch, Categorie
-from .models import Designation, ExcuseArbitre
+from .models import Designation, ExcuseArbitre, TarificationMatch
 
 class TypeMatchSerializer(serializers.ModelSerializer):
     """Serializer pour les types de match"""
@@ -235,4 +235,76 @@ class ExcuseArbitreListSerializer(serializers.ModelSerializer):
     def get_nom_complet(self, obj):
         """Retourner le nom complet de l'arbitre"""
         return f"{obj.prenom_arbitre} {obj.nom_arbitre}"
+
+
+class TarificationMatchSerializer(serializers.ModelSerializer):
+    """Serializer pour les tarifications de matchs"""
+    
+    competition_display = serializers.CharField(source='get_competition_display', read_only=True)
+    division_display = serializers.CharField(source='get_division_display', read_only=True)
+    type_match_display = serializers.CharField(source='get_type_match_display', read_only=True)
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    tarif_formatted = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = TarificationMatch
+        fields = [
+            'id', 'competition', 'competition_display', 'division', 'division_display',
+            'type_match', 'type_match_display', 'role', 'role_display',
+            'tarif', 'tarif_formatted', 'devise', 'is_active',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class TarificationMatchListSerializer(serializers.ModelSerializer):
+    """Serializer pour la liste des tarifications de matchs"""
+    
+    competition_display = serializers.CharField(source='get_competition_display', read_only=True)
+    division_display = serializers.CharField(source='get_division_display', read_only=True)
+    type_match_display = serializers.CharField(source='get_type_match_display', read_only=True)
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    tarif_formatted = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = TarificationMatch
+        fields = [
+            'id', 'competition_display', 'division_display', 'type_match_display',
+            'role_display', 'tarif_formatted', 'is_active'
+        ]
+
+
+class TarificationMatchCreateSerializer(serializers.ModelSerializer):
+    """Serializer pour la création de tarifications de matchs"""
+    
+    class Meta:
+        model = TarificationMatch
+        fields = [
+            'competition', 'division', 'type_match', 'role',
+            'tarif', 'devise', 'is_active'
+        ]
+    
+    def validate(self, data):
+        """Validation personnalisée"""
+        # Vérifier l'unicité de la combinaison
+        if TarificationMatch.objects.filter(
+            competition=data['competition'],
+            division=data.get('division'),
+            type_match=data['type_match'],
+            role=data['role']
+        ).exists():
+            raise serializers.ValidationError(
+                "Une tarification existe déjà pour cette combinaison de compétition, division, type de match et rôle."
+            )
+        return data
+
+
+class TarificationMatchUpdateSerializer(serializers.ModelSerializer):
+    """Serializer pour la mise à jour de tarifications de matchs"""
+    
+    class Meta:
+        model = TarificationMatch
+        fields = [
+            'tarif', 'devise', 'is_active'
+        ]
 
