@@ -243,3 +243,9 @@ En cas de problème :
 
 **Note** : Cette API est sécurisée et suit les meilleures pratiques de sécurité pour la réinitialisation de mots de passe.
 
+
+
+
+
+
+

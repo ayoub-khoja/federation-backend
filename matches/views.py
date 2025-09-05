@@ -2,12 +2,12 @@
 Vues API pour la gestion des matchs
 """
 from rest_framework import generics, permissions, status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.utils import timezone
 from datetime import datetime, timedelta
 
-from .models import Match, MatchEvent, Designation, TypeMatch, Categorie
+from .models import Match, MatchEvent, Designation, TypeMatch, Categorie, ExcuseArbitre
 from .serializers import (
     MatchSerializer,
     MatchCreateSerializer,
@@ -19,7 +19,10 @@ from .serializers import (
     DesignationUpdateSerializer,
     DesignationListSerializer,
     TypeMatchSerializer,
-    CategorieSerializer
+    CategorieSerializer,
+    ExcuseArbitreSerializer,
+    ExcuseArbitreCreateSerializer,
+    ExcuseArbitreListSerializer
 )
 
 class MatchListCreateView(generics.ListCreateAPIView):
@@ -414,7 +417,493 @@ def match_roles(request):
         'roles': roles
     })
 
+@api_view(['GET'])
+def matches_by_type(request, type_code):
+    """Récupérer les matchs sifflés par type de compétition"""
+    # Cette vue est accessible sans authentification
+    try:
+        # Récupérer le type de match par code
+        match_type = TypeMatch.objects.get(code=type_code, is_active=True)
+    except TypeMatch.DoesNotExist:
+        return Response({
+            'success': False,
+            'message': f'Type de match {type_code} non trouvé'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Récupérer les matchs sifflés (terminés) de ce type
+    matches = Match.objects.filter(
+        type_match=match_type,
+        status='completed'
+    ).select_related('type_match', 'categorie', 'referee').order_by('-match_date', '-match_time')
+    
+    # Appliquer des filtres optionnels
+    referee_id = request.GET.get('referee_id')
+    if referee_id:
+        matches = matches.filter(referee_id=referee_id)
+    
+    date_from = request.GET.get('date_from')
+    if date_from:
+        try:
+            from datetime import datetime
+            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+            matches = matches.filter(match_date__gte=date_from_obj)
+        except ValueError:
+            return Response({
+                'success': False,
+                'message': 'Format de date invalide. Utilisez YYYY-MM-DD'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    date_to = request.GET.get('date_to')
+    if date_to:
+        try:
+            from datetime import datetime
+            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+            matches = matches.filter(match_date__lte=date_to_obj)
+        except ValueError:
+            return Response({
+                'success': False,
+                'message': 'Format de date invalide. Utilisez YYYY-MM-DD'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Pagination
+    page_size = int(request.GET.get('page_size', 20))
+    page = int(request.GET.get('page', 1))
+    
+    start = (page - 1) * page_size
+    end = start + page_size
+    
+    total_matches = matches.count()
+    matches_page = matches[start:end]
+    
+    # Statistiques
+    stats = {
+        'total_matches': total_matches,
+        'page': page,
+        'page_size': page_size,
+        'total_pages': (total_matches + page_size - 1) // page_size,
+        'has_next': end < total_matches,
+        'has_previous': page > 1
+    }
+    
+    return Response({
+        'success': True,
+        'message': f'{total_matches} match(s) de {match_type.nom} trouvé(s)',
+        'type_info': {
+            'id': match_type.id,
+            'nom': match_type.nom,
+            'code': match_type.code,
+            'description': match_type.description
+        },
+        'statistics': stats,
+        'matches': MatchListSerializer(matches_page, many=True).data
+    })
+
+# Vues spécifiques pour chaque type de compétition
+class CompetitionMatchesView(generics.ListAPIView):
+    """Vue générique pour les matchs de compétition"""
+    permission_classes = [permissions.AllowAny]
+    serializer_class = MatchListSerializer
+    
+    def get_queryset(self):
+        type_code = self.kwargs['type_code']
+        try:
+            match_type = TypeMatch.objects.get(code=type_code, is_active=True)
+            return Match.objects.filter(
+                type_match=match_type,
+                status='completed'
+            ).select_related('type_match', 'categorie', 'referee').order_by('-match_date', '-match_time')
+        except TypeMatch.DoesNotExist:
+            return Match.objects.none()
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        
+        # Si aucun match trouvé, vérifier si le type existe
+        if not queryset.exists():
+            # Récupérer le type de match pour vérifier s'il existe
+            type_code = getattr(self, 'type_code', 'unknown')
+            try:
+                match_type = TypeMatch.objects.get(code=type_code, is_active=True)
+                return Response({
+                    'success': True,
+                    'message': f'Aucun match trouvé pour {match_type.nom}',
+                    'competition': {
+                        'code': match_type.code,
+                        'name': match_type.nom,
+                        'description': match_type.description
+                    },
+                    'matches': []
+                })
+            except TypeMatch.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'message': f'Type de match {type_code} non trouvé'
+                }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Récupérer le type de match depuis le premier match
+        match_type = queryset.first().type_match
+        
+        # Appliquer des filtres optionnels
+        referee_id = request.GET.get('referee_id')
+        if referee_id:
+            queryset = queryset.filter(referee_id=referee_id)
+        
+        date_from = request.GET.get('date_from')
+        if date_from:
+            try:
+                from datetime import datetime
+                date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+                queryset = queryset.filter(match_date__gte=date_from_obj)
+            except ValueError:
+                return Response({
+                    'success': False,
+                    'message': 'Format de date invalide (YYYY-MM-DD)'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        date_to = request.GET.get('date_to')
+        if date_to:
+            try:
+                from datetime import datetime
+                date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+                queryset = queryset.filter(match_date__lte=date_to_obj)
+            except ValueError:
+                return Response({
+                    'success': False,
+                    'message': 'Format de date invalide (YYYY-MM-DD)'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        
+        return Response({
+            'success': True,
+            'message': f'{queryset.count()} match(s) de {match_type.nom} trouvé(s)',
+            'competition': {
+                'code': match_type.code,
+                'name': match_type.nom,
+                'description': match_type.description
+            },
+            'matches': serializer.data
+        })
+
+# Vues spécifiques pour chaque type de compétition
+class Ligue1MatchesView(CompetitionMatchesView):
+    """Récupérer les matchs sifflés de Ligue 1"""
+    type_code = 'L1'
+    
+    def get_queryset(self):
+        try:
+            match_type = TypeMatch.objects.get(code='L1', is_active=True)
+            return Match.objects.filter(
+                type_match=match_type,
+                status='completed'
+            ).select_related('type_match', 'categorie', 'referee').order_by('-match_date', '-match_time')
+        except TypeMatch.DoesNotExist:
+            return Match.objects.none()
+
+class Ligue2MatchesView(CompetitionMatchesView):
+    """Récupérer les matchs sifflés de Ligue 2"""
+    type_code = 'L2'
+    
+    def get_queryset(self):
+        try:
+            match_type = TypeMatch.objects.get(code='L2', is_active=True)
+            return Match.objects.filter(
+                type_match=match_type,
+                status='completed'
+            ).select_related('type_match', 'categorie', 'referee').order_by('-match_date', '-match_time')
+        except TypeMatch.DoesNotExist:
+            return Match.objects.none()
+
+class C1MatchesView(CompetitionMatchesView):
+    """Récupérer les matchs sifflés de C1"""
+    type_code = 'C1'
+    
+    def get_queryset(self):
+        try:
+            match_type = TypeMatch.objects.get(code='C1', is_active=True)
+            return Match.objects.filter(
+                type_match=match_type,
+                status='completed'
+            ).select_related('type_match', 'categorie', 'referee').order_by('-match_date', '-match_time')
+        except TypeMatch.DoesNotExist:
+            return Match.objects.none()
+
+class C2MatchesView(CompetitionMatchesView):
+    """Récupérer les matchs sifflés de C2"""
+    type_code = 'C2'
+    
+    def get_queryset(self):
+        try:
+            match_type = TypeMatch.objects.get(code='C2', is_active=True)
+            return Match.objects.filter(
+                type_match=match_type,
+                status='completed'
+            ).select_related('type_match', 'categorie', 'referee').order_by('-match_date', '-match_time')
+        except TypeMatch.DoesNotExist:
+            return Match.objects.none()
+
+class JeunesMatchesView(CompetitionMatchesView):
+    """Récupérer les matchs sifflés de Jeunes"""
+    type_code = 'JUN'
+    
+    def get_queryset(self):
+        try:
+            match_type = TypeMatch.objects.get(code='JUN', is_active=True)
+            return Match.objects.filter(
+                type_match=match_type,
+                status='completed'
+            ).select_related('type_match', 'categorie', 'referee').order_by('-match_date', '-match_time')
+        except TypeMatch.DoesNotExist:
+            return Match.objects.none()
+
+class CoupeTunisieMatchesView(CompetitionMatchesView):
+    """Récupérer les matchs sifflés de Coupe de Tunisie"""
+    type_code = 'CT'
+    
+    def get_queryset(self):
+        try:
+            match_type = TypeMatch.objects.get(code='CT', is_active=True)
+            return Match.objects.filter(
+                type_match=match_type,
+                status='completed'
+            ).select_related('type_match', 'categorie', 'referee').order_by('-match_date', '-match_time')
+        except TypeMatch.DoesNotExist:
+            return Match.objects.none()
 
 
+# ===== EXCUSES D'ARBITRES =====
+class ExcuseArbitreListCreateView(generics.ListCreateAPIView):
+    """Vue pour lister et créer des excuses d'arbitres"""
+    permission_classes = [permissions.AllowAny]
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return ExcuseArbitreCreateSerializer
+        return ExcuseArbitreListSerializer
+    
+    def get_queryset(self):
+        """Retourner toutes les excuses d'arbitres"""
+        return ExcuseArbitre.objects.all().order_by('-created_at')
+    
+    def list(self, request, *args, **kwargs):
+        """Lister toutes les excuses d'arbitres"""
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        
+        return Response({
+            'success': True,
+            'message': f'{queryset.count()} excuse(s) trouvée(s)',
+            'excuses': serializer.data
+        })
+    
+    def create(self, request, *args, **kwargs):
+        """Créer une nouvelle excuse d'arbitre"""
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            excuse = serializer.save()
+            return Response({
+                'success': True,
+                'message': 'Excuse créée avec succès',
+                'excuse': ExcuseArbitreSerializer(excuse).data
+            }, status=status.HTTP_201_CREATED)
+        
+        return Response({
+            'success': False,
+            'message': 'Erreur lors de la création de l\'excuse',
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
+
+class ExcuseArbitreDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Vue pour consulter, modifier et supprimer une excuse d'arbitre"""
+    serializer_class = ExcuseArbitreSerializer
+    permission_classes = [permissions.AllowAny]
+    
+    def get_queryset(self):
+        """Retourner toutes les excuses d'arbitres"""
+        return ExcuseArbitre.objects.all()
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Récupérer une excuse spécifique"""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        
+        return Response({
+            'success': True,
+            'message': 'Excuse récupérée avec succès',
+            'excuse': serializer.data
+        })
+    
+    def update(self, request, *args, **kwargs):
+        """Modifier une excuse"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        
+        if serializer.is_valid():
+            excuse = serializer.save()
+            return Response({
+                'success': True,
+                'message': 'Excuse modifiée avec succès',
+                'excuse': serializer.data
+            })
+        
+        return Response({
+            'success': False,
+            'message': 'Erreur lors de la modification de l\'excuse',
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Supprimer une excuse"""
+        instance = self.get_object()
+        instance.delete()
+        
+        return Response({
+            'success': True,
+            'message': 'Excuse supprimée avec succès'
+        }, status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def excuses_arbitre_statistics(request):
+    """Statistiques des excuses d'arbitres"""
+    total_excuses = ExcuseArbitre.objects.count()
+    
+    # Excuses par mois (6 derniers mois)
+    from datetime import datetime, timedelta
+    six_months_ago = datetime.now() - timedelta(days=180)
+    recent_excuses = ExcuseArbitre.objects.filter(created_at__gte=six_months_ago).count()
+    
+    # Excuses actives (en cours)
+    today = timezone.now().date()
+    active_excuses = ExcuseArbitre.objects.filter(
+        date_debut__lte=today,
+        date_fin__gte=today
+    ).count()
+    
+    return Response({
+        'success': True,
+        'statistics': {
+            'total_excuses': total_excuses,
+            'recent_excuses': recent_excuses,
+            'active_excuses': active_excuses
+        }
+    })
+
+
+def excuses_passees_par_date(request):
+    """API pour voir les excuses passées par date"""
+    from datetime import date
+    from django.http import JsonResponse
+    
+    # Récupérer la date depuis les paramètres de requête
+    date_param = request.GET.get('date')
+    
+    if not date_param:
+        return JsonResponse({
+            'success': False,
+            'message': 'Paramètre date requis (format: YYYY-MM-DD)'
+        }, status=400)
+    
+    try:
+        # Convertir la date
+        target_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+    except ValueError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Format de date invalide. Utilisez YYYY-MM-DD'
+        }, status=400)
+    
+    # Récupérer les excuses passées (date_fin < date cible)
+    excuses_passees = ExcuseArbitre.objects.filter(
+        date_fin__lt=target_date
+    ).order_by('-date_fin')
+    
+    serializer = ExcuseArbitreSerializer(excuses_passees, many=True)
+    
+    return JsonResponse({
+        'success': True,
+        'message': f'{excuses_passees.count()} excuse(s) passée(s) trouvée(s) pour le {target_date}',
+        'date_cible': target_date.strftime('%Y-%m-%d'),
+        'excuses_passees': serializer.data
+    })
+
+
+def excuses_en_cours_par_date(request):
+    """API pour voir les excuses en cours par date"""
+    from datetime import date
+    from django.http import JsonResponse
+    
+    # Récupérer la date depuis les paramètres de requête
+    date_param = request.GET.get('date')
+    
+    if not date_param:
+        return JsonResponse({
+            'success': False,
+            'message': 'Paramètre date requis (format: YYYY-MM-DD)'
+        }, status=400)
+    
+    try:
+        # Convertir la date
+        target_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+    except ValueError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Format de date invalide. Utilisez YYYY-MM-DD'
+        }, status=400)
+    
+    # Récupérer les excuses en cours (date_debut <= date cible <= date_fin)
+    excuses_en_cours = ExcuseArbitre.objects.filter(
+        date_debut__lte=target_date,
+        date_fin__gte=target_date
+    ).order_by('-created_at')
+    
+    serializer = ExcuseArbitreSerializer(excuses_en_cours, many=True)
+    
+    return JsonResponse({
+        'success': True,
+        'message': f'{excuses_en_cours.count()} excuse(s) en cours trouvée(s) pour le {target_date}',
+        'date_cible': target_date.strftime('%Y-%m-%d'),
+        'excuses_en_cours': serializer.data
+    })
+
+
+def excuses_a_venir_par_date(request):
+    """API pour voir les excuses à venir par date"""
+    from datetime import date
+    from django.http import JsonResponse
+    
+    # Récupérer la date depuis les paramètres de requête
+    date_param = request.GET.get('date')
+    
+    if not date_param:
+        return JsonResponse({
+            'success': False,
+            'message': 'Paramètre date requis (format: YYYY-MM-DD)'
+        }, status=400)
+    
+    try:
+        # Convertir la date
+        target_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+    except ValueError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Format de date invalide. Utilisez YYYY-MM-DD'
+        }, status=400)
+    
+    # Récupérer les excuses à venir (date_debut > date cible)
+    excuses_a_venir = ExcuseArbitre.objects.filter(
+        date_debut__gt=target_date
+    ).order_by('date_debut')
+    
+    serializer = ExcuseArbitreSerializer(excuses_a_venir, many=True)
+    
+    return JsonResponse({
+        'success': True,
+        'message': f'{excuses_a_venir.count()} excuse(s) à venir trouvée(s) pour le {target_date}',
+        'date_cible': target_date.strftime('%Y-%m-%d'),
+        'excuses_a_venir': serializer.data
+    })
 

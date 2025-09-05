@@ -701,6 +701,75 @@ def admin_login(request):
         'errors': serializer.errors
     }, status=status.HTTP_400_BAD_REQUEST)
 
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def admin_email_login(request):
+    """Connexion d'un administrateur par email avec token JWT"""
+    from rest_framework import serializers
+    
+    # Serializer inline pour éviter les problèmes d'import
+    class AdminEmailLoginSerializer(serializers.Serializer):
+        email = serializers.EmailField()
+        password = serializers.CharField(write_only=True)
+        
+        def validate(self, data):
+            email = data.get('email')
+            password = data.get('password')
+            
+            if email and password:
+                # Normaliser l'email
+                email = email.lower().strip()
+                
+                # Essayer de trouver l'administrateur par email
+                try:
+                    admin = Admin.objects.get(email=email)
+                    if admin.check_password(password) and admin.is_active:
+                        # Créer un dictionnaire avec les champs nécessaires
+                        user_data = {
+                            'id': admin.id,
+                            'phone_number': admin.phone_number,
+                            'email': admin.email,
+                            'full_name': admin.get_full_name(),
+                            'user_type': admin.user_type,
+                            'user_type_display': admin.get_user_type_display(),
+                            'department': admin.department,
+                            'position': admin.position,
+                            'is_staff': admin.is_staff,
+                            'is_superuser': admin.is_superuser,
+                            'is_active': admin.is_active,
+                            'date_joined': admin.date_joined
+                        }
+                        data['user'] = user_data
+                        data['admin_obj'] = admin  # Ajouter l'objet admin pour le token
+                        return data
+                    else:
+                        raise serializers.ValidationError("Mot de passe incorrect ou compte désactivé.")
+                except Admin.DoesNotExist:
+                    raise serializers.ValidationError("Aucun administrateur trouvé avec cette adresse email.")
+            else:
+                raise serializers.ValidationError("L'email et le mot de passe sont requis.")
+    
+    serializer = AdminEmailLoginSerializer(data=request.data)
+    if serializer.is_valid():
+        user_data = serializer.validated_data['user']
+        admin_obj = serializer.validated_data['admin_obj']
+        
+        # Générer les tokens JWT
+        refresh = RefreshToken.for_user(admin_obj)
+        
+        return Response({
+            'success': True,
+            'message': 'Connexion réussie',
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'user': user_data
+        })
+    return Response({
+        'success': False,
+        'message': 'Échec de la connexion',
+        'errors': serializer.errors
+    }, status=status.HTTP_400_BAD_REQUEST)
+
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def admin_profile(request):
@@ -855,6 +924,31 @@ def ligue_delete(request, ligue_id):
 # ============================================================================
 # VUES D'ADMINISTRATION
 # ============================================================================
+
+@api_view(['DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def arbitre_delete(request, arbitre_id):
+    """Supprimer un arbitre"""
+    # Valider l'authentification JWT
+    admin_user, error_message = validate_jwt_admin(request)
+    if not admin_user:
+        return Response({'detail': error_message}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        arbitre = Arbitre.objects.get(id=arbitre_id)
+        arbitre_name = arbitre.get_full_name()
+        arbitre_phone = arbitre.phone_number
+        arbitre.delete()
+        
+        return Response({
+            'success': True,
+            'message': f'Arbitre {arbitre_name} ({arbitre_phone}) supprimé avec succès'
+        })
+    except Arbitre.DoesNotExist:
+        return Response({
+            'success': False,
+            'message': 'Arbitre non trouvé'
+        }, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
@@ -2463,6 +2557,9 @@ def confirm_password_reset(request):
             user.set_password(new_password)
             user.save()
             
+            # Note: Les tokens JWT existants resteront valides jusqu'à expiration
+            # L'utilisateur devra se reconnecter manuellement avec le nouveau mot de passe
+            
             # Marquer le token comme utilisé
             reset_token.mark_as_used()
             
@@ -2471,9 +2568,11 @@ def confirm_password_reset(request):
             
             return Response({
                 'success': True,
-                'message': 'Mot de passe réinitialisé avec succès. Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.',
+                'message': 'Mot de passe réinitialisé avec succès. Tous vos tokens de connexion ont été invalidés. Veuillez vous reconnecter avec votre nouveau mot de passe.',
                 'user_type': user_type,
-                'user_email': user.email
+                'user_email': user.email,
+                'action_required': 'logout_and_relogin',
+                'instructions': 'Déconnectez-vous de l\'application et reconnectez-vous avec votre nouveau mot de passe.'
             }, status=status.HTTP_200_OK)
         
         # Gestion des erreurs de validation

@@ -386,6 +386,38 @@ class Designation(models.Model):
         self.save()
 
 
+class ExcuseArbitre(models.Model):
+    """Modèle pour les excuses d'arbitres"""
+    
+    nom_arbitre = models.CharField(max_length=100, verbose_name="Nom de l'arbitre")
+    prenom_arbitre = models.CharField(max_length=100, verbose_name="Prénom de l'arbitre")
+    date_debut = models.DateField(verbose_name="Date de début")
+    date_fin = models.DateField(verbose_name="Date de fin")
+    cause = models.TextField(verbose_name="Cause de l'excuse")
+    piece_jointe = models.FileField(
+        upload_to='excuses/',
+        blank=True,
+        null=True,
+        verbose_name="Pièce jointe"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Créé le")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Modifié le")
+    
+    class Meta:
+        verbose_name = "Excuse d'arbitre"
+        verbose_name_plural = "Excuses d'arbitres"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.prenom_arbitre} {self.nom_arbitre} - {self.date_debut} au {self.date_fin}"
+    
+    def clean(self):
+        """Validation des dates"""
+        from django.core.exceptions import ValidationError
+        if self.date_debut and self.date_fin and self.date_debut > self.date_fin:
+            raise ValidationError("La date de début ne peut pas être postérieure à la date de fin")
+
+
 
 
 

@@ -190,3 +190,9 @@ curl -X PATCH "http://localhost:8000/api/accounts/arbitres/profile/update/" \
 Un script de test est disponible dans `test_update_profile_api.py` pour vérifier le bon fonctionnement de l'API.
 
 
+
+
+
+
+
+

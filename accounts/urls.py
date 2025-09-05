@@ -46,6 +46,8 @@ urlpatterns = [
     path('admins/register', views.admin_register, name='admin_register_no_slash'),
     path('admins/login/', views.admin_login, name='admin_login'),
     path('admins/login', views.admin_login, name='admin_login_no_slash'),
+    path('admins/email-login/', views.admin_email_login, name='admin_email_login'),
+    path('admins/email-login', views.admin_email_login, name='admin_email_login_no_slash'),
     path('admins/profile/', views.admin_profile, name='admin_profile'),
     path('admins/profile/update/', views.admin_update_profile, name='admin_update_profile'),
     
@@ -110,6 +112,11 @@ urlpatterns = [
     path('arbitres/excuses/<int:excuse_id>/', views.detail_excuse_arbitre, name='detail_excuse_arbitre'),
     path('arbitres/excuses/<int:excuse_id>/update/', views.update_excuse_arbitre, name='update_excuse_arbitre'),
     path('arbitres/excuses/<int:excuse_id>/cancel/', views.cancel_excuse_arbitre, name='cancel_excuse_arbitre'),
+    
+    # ============================================================================
+    # ADMINISTRATION - SUPPRESSION ARBITRES
+    # ============================================================================
+    path('admin/arbitres/<int:arbitre_id>/delete/', views.arbitre_delete, name='arbitre_delete'),
     
     # ============================================================================
 # RÉINITIALISATION DE MOT DE PASSE AVEC OTP

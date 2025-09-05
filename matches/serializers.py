@@ -3,7 +3,7 @@ Serializers pour l'API des matchs
 """
 from rest_framework import serializers
 from .models import Match, MatchEvent, TypeMatch, Categorie
-from .models import Designation
+from .models import Designation, ExcuseArbitre
 
 class TypeMatchSerializer(serializers.ModelSerializer):
     """Serializer pour les types de match"""
@@ -189,6 +189,50 @@ class DesignationListSerializer(serializers.ModelSerializer):
         return "Match non trouvé"
 
 
+class ExcuseArbitreSerializer(serializers.ModelSerializer):
+    """Serializer pour les excuses d'arbitres"""
+    
+    class Meta:
+        model = ExcuseArbitre
+        fields = [
+            'id', 'nom_arbitre', 'prenom_arbitre', 'date_debut', 'date_fin', 
+            'cause', 'piece_jointe', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
+class ExcuseArbitreCreateSerializer(serializers.ModelSerializer):
+    """Serializer pour la création d'excuses d'arbitres"""
+    
+    class Meta:
+        model = ExcuseArbitre
+        fields = [
+            'nom_arbitre', 'prenom_arbitre', 'date_debut', 'date_fin', 
+            'cause', 'piece_jointe'
+        ]
+    
+    def validate(self, data):
+        """Validation personnalisée"""
+        if data['date_debut'] > data['date_fin']:
+            raise serializers.ValidationError(
+                "La date de début ne peut pas être postérieure à la date de fin"
+            )
+        return data
+
+
+class ExcuseArbitreListSerializer(serializers.ModelSerializer):
+    """Serializer pour la liste des excuses d'arbitres"""
+    
+    nom_complet = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ExcuseArbitre
+        fields = [
+            'id', 'nom_complet', 'date_debut', 'date_fin', 
+            'cause', 'piece_jointe', 'created_at'
+        ]
+    
+    def get_nom_complet(self, obj):
+        """Retourner le nom complet de l'arbitre"""
+        return f"{obj.prenom_arbitre} {obj.nom_arbitre}"
 

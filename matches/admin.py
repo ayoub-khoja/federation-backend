@@ -3,27 +3,7 @@ Configuration de l'interface d'administration pour les matchs
 """
 from django.contrib import admin
 from django.contrib import messages
-from .models import Match, MatchEvent, Designation, TypeMatch, Categorie
-
-@admin.register(TypeMatch)
-class TypeMatchAdmin(admin.ModelAdmin):
-    """Interface d'administration pour les types de match"""
-    
-    list_display = ['nom', 'code', 'is_active', 'ordre', 'created_at']
-    list_filter = ['is_active', 'created_at']
-    search_fields = ['nom', 'code', 'description']
-    ordering = ['ordre', 'nom']
-    list_editable = ['is_active', 'ordre']
-
-@admin.register(Categorie)
-class CategorieAdmin(admin.ModelAdmin):
-    """Interface d'administration pour les catégories"""
-    
-    list_display = ['nom', 'code', 'age_min', 'age_max', 'is_active', 'ordre', 'created_at']
-    list_filter = ['is_active', 'created_at']
-    search_fields = ['nom', 'code', 'description']
-    ordering = ['ordre', 'nom']
-    list_editable = ['is_active', 'ordre']
+from .models import Match, MatchEvent, Designation, TypeMatch, Categorie, ExcuseArbitre
 
 @admin.register(Match)
 class MatchAdmin(admin.ModelAdmin):
@@ -31,10 +11,10 @@ class MatchAdmin(admin.ModelAdmin):
     
     list_display = [
         'match_date', 'match_time', 'home_team', 'away_team',
-        'stadium', 'referee', 'role', 'status', 'score_display'
+        'stadium', 'referee', 'status', 'score_display'
     ]
     list_filter = [
-        'type_match', 'categorie', 'role', 'status', 'match_date'
+        'type_match', 'categorie', 'status', 'match_date'
     ]
     search_fields = [
         'home_team', 'away_team', 'stadium', 'referee__first_name', 
@@ -55,7 +35,7 @@ class MatchAdmin(admin.ModelAdmin):
             'classes': ['collapse']
         }),
         ('Arbitrage', {
-            'fields': ('referee', 'role')
+            'fields': ('referee',)
         }),
         ('Documents et rapports', {
             'fields': ('description', 'match_sheet', 'match_report', 'incidents'),
@@ -251,4 +231,47 @@ class DesignationAdmin(admin.ModelAdmin):
                     request, 
                     f"Erreur lors de l'envoi de la notification: {str(e)}"
                 )
+
+
+@admin.register(ExcuseArbitre)
+class ExcuseArbitreAdmin(admin.ModelAdmin):
+    """Interface d'administration pour les excuses d'arbitres"""
+    
+    list_display = [
+        'prenom_arbitre', 'nom_arbitre', 'date_debut', 'date_fin', 
+        'cause_short', 'piece_jointe', 'created_at'
+    ]
+    
+    list_filter = [
+        'date_debut', 'date_fin', 'created_at'
+    ]
+    
+    search_fields = [
+        'nom_arbitre', 'prenom_arbitre', 'cause'
+    ]
+    
+    ordering = ['-created_at']
+    
+    date_hierarchy = 'created_at'
+    
+    fieldsets = (
+        ('Informations de l\'arbitre', {
+            'fields': ('nom_arbitre', 'prenom_arbitre')
+        }),
+        ('Période d\'excuse', {
+            'fields': ('date_debut', 'date_fin')
+        }),
+        ('Détails', {
+            'fields': ('cause', 'piece_jointe')
+        }),
+    )
+    
+    readonly_fields = ['created_at', 'updated_at']
+    
+    def cause_short(self, obj):
+        """Afficher un résumé court de la cause"""
+        if len(obj.cause) > 50:
+            return obj.cause[:50] + "..."
+        return obj.cause
+    cause_short.short_description = "Cause"
 

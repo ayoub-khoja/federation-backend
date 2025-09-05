@@ -29,6 +29,27 @@ urlpatterns = [
     path('types/', views.match_types, name='match_types'),
     path('categories/', views.categories, name='categories'),
     path('roles/', views.match_roles, name='match_roles'),
+    
+    # ===== MATCHS PAR TYPE =====
+    path('ligue1/', views.Ligue1MatchesView.as_view(), name='ligue1_matches'),
+    path('ligue2/', views.Ligue2MatchesView.as_view(), name='ligue2_matches'),
+    path('c1/', views.C1MatchesView.as_view(), name='c1_matches'),
+    path('c2/', views.C2MatchesView.as_view(), name='c2_matches'),
+    path('jeunes/', views.JeunesMatchesView.as_view(), name='jeunes_matches'),
+    path('coupe-tunisie/', views.CoupeTunisieMatchesView.as_view(), name='coupe_tunisie_matches'),
+    
+    # ===== API GÉNÉRIQUE PAR TYPE =====
+    path('type/<str:type_code>/', views.matches_by_type, name='matches_by_type'),
+    
+    # ===== EXCUSES D'ARBITRES =====
+    path('excuses/', views.ExcuseArbitreListCreateView.as_view(), name='excuse_list_create'),
+    path('excuses/<int:pk>/', views.ExcuseArbitreDetailView.as_view(), name='excuse_detail'),
+    path('excuses/statistics/', views.excuses_arbitre_statistics, name='excuse_statistics'),
+    
+    # ===== EXCUSES PAR DATE =====
+    path('excuses/passees/', views.excuses_passees_par_date, name='excuses_passees_par_date'),
+    path('excuses/en-cours/', views.excuses_en_cours_par_date, name='excuses_en_cours_par_date'),
+    path('excuses/a-venir/', views.excuses_a_venir_par_date, name='excuses_a_venir_par_date'),
 ]
 
 

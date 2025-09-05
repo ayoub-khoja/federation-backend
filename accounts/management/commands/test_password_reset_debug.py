@@ -105,3 +105,9 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR(f'❌ Erreur lors de la vérification: {e}'))
         else:
             self.stdout.write(self.style.ERROR('❌ Échec de la confirmation'))
+
+
+
+
+
+
