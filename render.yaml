@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: federation-backend
+    env: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn arbitrage_project.wsgi:application"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.12
+      - key: DJANGO_SETTINGS_MODULE
+        value: arbitrage_project.settings_production
