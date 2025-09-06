@@ -7,7 +7,7 @@ import sys
 import django
 
 # Configuration Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'arbitrage_project.settings')
+
 django.setup()
 
 from accounts.models import Arbitre
@@ -84,6 +84,9 @@ if __name__ == "__main__":
     print("\n" + "=" * 50)
     print("🏁 Script terminé")
     print("=" * 50)
+
+
+
 
 
 

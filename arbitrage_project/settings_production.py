@@ -25,6 +25,10 @@ DATABASES = {
         'PASSWORD': config('DB_PASSWORD', default=''),
         'HOST': config('DB_HOST', default='localhost'),
         'PORT': config('DB_PORT', default='5432'),
+        'OPTIONS': {
+            'options': '-c search_path=arbitrage_app,public'
+        },
+        'CONN_MAX_AGE': 600,
     }
 }
 

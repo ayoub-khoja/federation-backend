@@ -226,3 +226,6 @@ Vérifiez que l'URL du frontend est bien dans `CORS_ALLOWED_ORIGINS` dans `setti
 
 
 
+
+
+

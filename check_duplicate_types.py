@@ -6,7 +6,6 @@ import os
 import django
 
 # Configuration Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'arbitrage_project.settings')
 django.setup()
 
 from matches.models import TypeMatch
