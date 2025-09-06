@@ -4,9 +4,11 @@ services:
     env: python
     plan: free
     buildCommand: "./build.sh"
-    startCommand: "gunicorn arbitrage_project.wsgi:application"
+    startCommand: "source .venv/bin/activate && gunicorn arbitrage_project.wsgi:application"
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.12
       - key: DJANGO_SETTINGS_MODULE
         value: arbitrage_project.settings_production
+      - key: PATH
+        value: "/opt/render/project/src/.venv/bin:$PATH"
