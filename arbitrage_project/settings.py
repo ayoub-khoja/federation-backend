@@ -124,6 +124,9 @@ STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
 
+# Configuration pour servir les fichiers statiques en développement
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+
 STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
@@ -267,6 +270,7 @@ EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_USE_SSL = False
+
 
 # Configuration des emails (à remplacer par vos vraies valeurs)
 EMAIL_HOST_USER = 'ayoubramezkhoja2003@gmail.com'  # Votre adresse Gmail
