@@ -37,10 +37,11 @@ CORS_ALLOWED_ORIGINS = [
     "https://federation-backend.onrender.com",
     "https://federation-admin-front.vercel.app",
     "https://federation-mobile-front.vercel.app",
+    "https://federation-mobile.vercel.app",  # URL mobile corrigée
 ]
 
-# Désactiver CORS_ALLOW_ALL_ORIGINS en production
-CORS_ALLOW_ALL_ORIGINS = False
+# Permettre temporairement toutes les origines pour le débogage
+CORS_ALLOW_ALL_ORIGINS = True  # Temporaire pour le débogage
 
 # Configuration des fichiers statiques pour la production
 STATIC_URL = '/static/'
@@ -70,3 +71,38 @@ SECURE_HSTS_PRELOAD = True
 # Configuration des sessions
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
+
+# Configuration de logging pour le débogage
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'accounts': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}
+
+# Message de démarrage personnalisé
+print("🚀 Serveur Django démarré en mode PRODUCTION")
+print(f"🌐 URL du serveur: {PRODUCTION_URL}")
+print(f"📱 API Base URL: {API_BASE_URL}")
+print(f"🔒 DEBUG: {DEBUG}")
+print(f"🌍 ALLOWED_HOSTS: {ALLOWED_HOSTS}")
+print(f"🔗 CORS_ALLOW_ALL_ORIGINS: {CORS_ALLOW_ALL_ORIGINS}")

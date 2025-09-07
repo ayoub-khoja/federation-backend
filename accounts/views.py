@@ -348,27 +348,42 @@ def arbitre_register(request):
 @permission_classes([permissions.AllowAny])
 def arbitre_login(request):
     """Connexion d'un arbitre"""
-    serializer = ArbitreLoginSerializer(data=request.data)
-    if serializer.is_valid():
-        user = serializer.validated_data['user']
-        refresh = RefreshToken.for_user(user)
+    try:
+        print(f"🔐 Tentative de connexion arbitre - IP: {request.META.get('REMOTE_ADDR')}")
+        print(f"📱 User-Agent: {request.META.get('HTTP_USER_AGENT', 'Inconnu')}")
+        print(f"🌐 Origin: {request.META.get('HTTP_ORIGIN', 'Aucun')}")
+        
+        serializer = ArbitreLoginSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.validated_data['user']
+            refresh = RefreshToken.for_user(user)
+            print(f"✅ Connexion réussie pour l'arbitre: {user.get_full_name()}")
+            return Response({
+                'success': True,
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+                'user': {
+                    'id': user.id,
+                    'phone_number': user.phone_number,
+                    'full_name': user.get_full_name(),
+                    'user_type': 'arbitre',
+                    'grade': user.grade,
+                    'ligue': user.ligue.nom if user.ligue else None
+                }
+            })
+        else:
+            print(f"❌ Erreur de validation: {serializer.errors}")
+            return Response({
+                'success': False,
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        print(f"❌ Erreur lors de la connexion arbitre: {e}")
         return Response({
-            'success': True,
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-            'user': {
-                'id': user.id,
-                'phone_number': user.phone_number,
-                'full_name': user.get_full_name(),
-                'user_type': 'arbitre',
-                'grade': user.grade,
-                'ligue': user.ligue.nom if user.ligue else None
-            }
-        })
-    return Response({
-        'success': False,
-        'errors': serializer.errors
-    }, status=status.HTTP_400_BAD_REQUEST)
+            'success': False,
+            'message': 'Erreur interne du serveur',
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
