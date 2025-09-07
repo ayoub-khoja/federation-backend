@@ -395,11 +395,37 @@ def arbitre_profile(request):
     print(f"🔍 DEBUG - request.user.is_authenticated: {request.user.is_authenticated}")
     print(f"🔍 DEBUG - request.user.id: {getattr(request.user, 'id', 'N/A')}")
     
-    if not isinstance(request.user, Arbitre):
-        print(f"❌ DEBUG - L'utilisateur n'est pas un Arbitre, c'est un: {type(request.user)}")
-        return Response({'detail': 'Accès non autorisé'}, status=status.HTTP_403_FORBIDDEN)
+    # Vérification améliorée de l'utilisateur
+    if not request.user.is_authenticated:
+        print(f"❌ DEBUG - Utilisateur non authentifié")
+        return Response({'detail': 'Authentification requise'}, status=status.HTTP_401_UNAUTHORIZED)
     
-    serializer = ArbitreProfileSerializer(request.user)
+    # Vérifier si c'est un arbitre ou essayer de le récupérer
+    arbitre_user = None
+    
+    if isinstance(request.user, Arbitre):
+        arbitre_user = request.user
+        print(f"✅ DEBUG - Utilisateur est un Arbitre: {arbitre_user.get_full_name()}")
+    else:
+        print(f"⚠️ DEBUG - L'utilisateur n'est pas un Arbitre, c'est un: {type(request.user)}")
+        # Essayer de récupérer l'arbitre par ID si c'est un utilisateur générique
+        try:
+            arbitre_user = Arbitre.objects.get(id=request.user.id, is_active=True)
+            print(f"✅ DEBUG - Arbitre récupéré par ID: {arbitre_user.get_full_name()}")
+        except Arbitre.DoesNotExist:
+            print(f"❌ DEBUG - Aucun arbitre trouvé avec l'ID: {request.user.id}")
+            return Response({
+                'detail': 'Accès non autorisé - Seuls les arbitres peuvent accéder à ce profil',
+                'user_type': str(type(request.user).__name__),
+                'user_id': request.user.id
+            }, status=status.HTTP_403_FORBIDDEN)
+    
+    if not arbitre_user:
+        return Response({
+            'detail': 'Erreur lors de la récupération du profil arbitre'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    serializer = ArbitreProfileSerializer(arbitre_user)
     return Response(serializer.data)
 
 @api_view(['GET'])
