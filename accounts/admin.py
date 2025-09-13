@@ -4,7 +4,7 @@ Configuration de l'interface d'administration pour les comptes
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.utils.html import format_html
-from .models import Arbitre, Commissaire, LigueArbitrage, Admin
+from .models import Arbitre, Commissaire, LigueArbitrage, Admin, ExcuseArbitre
 
 @admin.register(Admin)
 class AdminUserAdmin(UserAdmin):
@@ -171,6 +171,56 @@ class LigueArbitrageAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         """Optimise les requêtes"""
         return super().get_queryset(request)
+
+@admin.register(ExcuseArbitre)
+class ExcuseArbitreAdmin(admin.ModelAdmin):
+    """Interface d'administration pour les excuses d'arbitres"""
+    
+    list_display = [
+        'arbitre', 'date_debut', 'date_fin', 'status', 
+        'cause_short', 'piece_jointe', 'created_at'
+    ]
+    
+    list_filter = [
+        'status', 'date_debut', 'date_fin', 'created_at', 'arbitre__ligue'
+    ]
+    
+    search_fields = [
+        'arbitre__first_name', 'arbitre__last_name', 'arbitre__phone_number', 'cause'
+    ]
+    
+    ordering = ['-created_at']
+    
+    date_hierarchy = 'created_at'
+    
+    fieldsets = (
+        ('Arbitre', {
+            'fields': ('arbitre',)
+        }),
+        ('Période d\'excuse', {
+            'fields': ('date_debut', 'date_fin')
+        }),
+        ('Détails', {
+            'fields': ('cause', 'piece_jointe')
+        }),
+        ('Gestion', {
+            'fields': ('status', 'commentaire_admin', 'traite_par', 'traite_le'),
+            'classes': ['collapse']
+        }),
+    )
+    
+    readonly_fields = ['created_at', 'updated_at']
+    
+    def cause_short(self, obj):
+        """Afficher un résumé court de la cause"""
+        if len(obj.cause) > 50:
+            return obj.cause[:50] + "..."
+        return obj.cause
+    cause_short.short_description = "Cause"
+    
+    def get_queryset(self, request):
+        """Optimise les requêtes"""
+        return super().get_queryset(request).select_related('arbitre', 'arbitre__ligue', 'traite_par')
 
 # Configuration du site d'administration
 admin.site.site_header = "Direction Nationale de l'Arbitrage"

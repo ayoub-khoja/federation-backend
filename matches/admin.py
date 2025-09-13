@@ -233,47 +233,48 @@ class DesignationAdmin(admin.ModelAdmin):
                 )
 
 
-@admin.register(ExcuseArbitre)
-class ExcuseArbitreAdmin(admin.ModelAdmin):
-    """Interface d'administration pour les excuses d'arbitres"""
-    
-    list_display = [
-        'prenom_arbitre', 'nom_arbitre', 'date_debut', 'date_fin', 
-        'cause_short', 'piece_jointe', 'created_at'
-    ]
-    
-    list_filter = [
-        'date_debut', 'date_fin', 'created_at'
-    ]
-    
-    search_fields = [
-        'nom_arbitre', 'prenom_arbitre', 'cause'
-    ]
-    
-    ordering = ['-created_at']
-    
-    date_hierarchy = 'created_at'
-    
-    fieldsets = (
-        ('Informations de l\'arbitre', {
-            'fields': ('nom_arbitre', 'prenom_arbitre')
-        }),
-        ('Période d\'excuse', {
-            'fields': ('date_debut', 'date_fin')
-        }),
-        ('Détails', {
-            'fields': ('cause', 'piece_jointe')
-        }),
-    )
-    
-    readonly_fields = ['created_at', 'updated_at']
-    
-    def cause_short(self, obj):
-        """Afficher un résumé court de la cause"""
-        if len(obj.cause) > 50:
-            return obj.cause[:50] + "..."
-        return obj.cause
-    cause_short.short_description = "Cause"
+# Ancien modèle ExcuseArbitre désactivé - maintenant dans accounts.models
+# @admin.register(ExcuseArbitre)
+# class ExcuseArbitreAdmin(admin.ModelAdmin):
+#     """Interface d'administration pour les excuses d'arbitres"""
+#     
+#     list_display = [
+#         'prenom_arbitre', 'nom_arbitre', 'date_debut', 'date_fin', 
+#         'cause_short', 'piece_jointe', 'created_at'
+#     ]
+#     
+#     list_filter = [
+#         'date_debut', 'date_fin', 'created_at'
+#     ]
+#     
+#     search_fields = [
+#         'nom_arbitre', 'prenom_arbitre', 'cause'
+#     ]
+#     
+#     ordering = ['-created_at']
+#     
+#     date_hierarchy = 'created_at'
+#     
+#     fieldsets = (
+#         ('Informations de l\'arbitre', {
+#             'fields': ('nom_arbitre', 'prenom_arbitre')
+#         }),
+#         ('Période d\'excuse', {
+#             'fields': ('date_debut', 'date_fin')
+#         }),
+#         ('Détails', {
+#             'fields': ('cause', 'piece_jointe')
+#         }),
+#     )
+#     
+#     readonly_fields = ['created_at', 'updated_at']
+#     
+#     def cause_short(self, obj):
+#         """Afficher un résumé court de la cause"""
+#         if len(obj.cause) > 50:
+#             return obj.cause[:50] + "..."
+#         return obj.cause
+#     cause_short.short_description = "Cause"
 
 
 @admin.register(TarificationMatch)

@@ -107,7 +107,7 @@ urlpatterns = [
     # ============================================================================
     # EXCUSES D'ARBITRES
     # ============================================================================
-    path('arbitres/excuses/', views.create_excuse_arbitre, name='create_excuse_arbitre'),
+    path('arbitres/excuses/', views.excuses_arbitre_unified, name='excuses_arbitre_unified'),
     path('arbitres/excuses/list/', views.list_excuses_arbitre, name='list_excuses_arbitre'),
     path('arbitres/excuses/<int:excuse_id>/', views.detail_excuse_arbitre, name='detail_excuse_arbitre'),
     path('arbitres/excuses/<int:excuse_id>/update/', views.update_excuse_arbitre, name='update_excuse_arbitre'),

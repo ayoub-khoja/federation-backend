@@ -2088,6 +2088,92 @@ def mark_notification_read(request, notification_id):
 # VUES POUR LES EXCUSES D'ARBITRES
 # ============================================================================
 
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def excuses_arbitre_unified(request):
+    """Endpoint unifié pour les excuses d'arbitres (GET pour lister, POST pour créer)"""
+    if request.method == 'GET':
+        # Logique pour lister les excuses de l'arbitre connecté
+        if not isinstance(request.user, Arbitre):
+            return Response({
+                'success': False,
+                'message': 'Accès non autorisé - Seuls les arbitres peuvent consulter leurs excuses',
+                'error_code': 'ACCESS_DENIED'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            # Récupérer les excuses de l'arbitre connecté
+            excuses = ExcuseArbitre.objects.filter(arbitre=request.user).order_by('-created_at')
+            
+            # Sérialiser les données
+            serializer = ExcuseArbitreDetailSerializer(excuses, many=True)
+            
+            return Response({
+                'success': True,
+                'message': f'{excuses.count()} excuse(s) trouvée(s)',
+                'excuses': serializer.data
+            })
+            
+        except Exception as e:
+            print(f"❌ Erreur lors de la récupération des excuses: {e}")
+            return Response({
+                'success': False,
+                'message': 'Erreur lors de la récupération des excuses',
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+    elif request.method == 'POST':
+        # Logique pour créer une excuse d'arbitre
+        if not isinstance(request.user, Arbitre):
+            return Response({
+                'success': False,
+                'message': 'Accès non autorisé - Seuls les arbitres peuvent créer des excuses',
+                'error_code': 'ACCESS_DENIED'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            serializer = ExcuseArbitreCreateSerializer(
+                data=request.data, 
+                context={'request': request}
+            )
+            
+            if serializer.is_valid():
+                # Créer l'excuse avec l'arbitre connecté
+                excuse = serializer.save(arbitre=request.user)
+                
+                # Sérialiser les données complètes pour la réponse
+                excuse_data = ExcuseArbitreDetailSerializer(excuse).data
+                
+                return Response({
+                    'success': True,
+                    'message': 'Excuse créée avec succès',
+                    'excuse': excuse_data
+                }, status=status.HTTP_201_CREATED)
+            
+            # Gestion des erreurs de validation
+            error_details = {}
+            for field, errors in serializer.errors.items():
+                if isinstance(errors, list):
+                    error_details[field] = errors[0] if errors else "Erreur de validation"
+                else:
+                    error_details[field] = str(errors)
+            
+            return Response({
+                'success': False,
+                'message': 'Erreur de validation des données',
+                'errors': error_details,
+                'error_code': 'VALIDATION_ERROR'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            print(f"❌ Erreur lors de la création de l'excuse: {e}")
+            return Response({
+                'success': False,
+                'message': 'Erreur interne du serveur lors de la création',
+                'error': str(e),
+                'error_code': 'INTERNAL_ERROR'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def create_excuse_arbitre(request):
