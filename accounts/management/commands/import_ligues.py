@@ -47,7 +47,7 @@ class Command(BaseCommand):
             
             for ligue_info in ligues_data:
                 # Vérifier les champs requis
-                required_fields = ['code', 'nom', 'region']
+                required_fields = ['nom']
                 for field in required_fields:
                     if field not in ligue_info:
                         self.stdout.write(
@@ -59,11 +59,10 @@ class Command(BaseCommand):
                 
                 # Créer ou mettre à jour la ligue
                 ligue, created = LigueArbitrage.objects.get_or_create(
-                    code=ligue_info['code'],
+                    nom=ligue_info['nom'],
                     defaults={
-                        'nom': ligue_info['nom'],
-                        'region': ligue_info['region'],
-                        'active': ligue_info.get('active', True),
+                        'description': ligue_info.get('region', ''),
+                        'is_active': ligue_info.get('active', True),
                         'ordre': ligue_info.get('ordre', 0),
                     }
                 )
@@ -76,8 +75,8 @@ class Command(BaseCommand):
                 elif options['force']:
                     # Mettre à jour la ligue existante
                     ligue.nom = ligue_info['nom']
-                    ligue.region = ligue_info['region']
-                    ligue.active = ligue_info.get('active', True)
+                    ligue.description = ligue_info.get('region', ligue.description)
+                    ligue.is_active = ligue_info.get('active', True)
                     ligue.ordre = ligue_info.get('ordre', 0)
                     ligue.save()
                     updated_count += 1
@@ -102,8 +101,8 @@ class Command(BaseCommand):
             # Afficher toutes les ligues actives
             self.stdout.write('')
             self.stdout.write(self.style.SUCCESS('=== LIGUES ACTIVES ==='))
-            for ligue in LigueArbitrage.objects.filter(active=True).order_by('ordre', 'nom'):
-                self.stdout.write(f'• {ligue.nom} ({ligue.region}) - Code: {ligue.code}')
+            for ligue in LigueArbitrage.objects.filter(is_active=True).order_by('ordre', 'nom'):
+                self.stdout.write(f'• {ligue.nom} - {ligue.description}')
                 
         except yaml.YAMLError as e:
             raise CommandError(f'Erreur lors de la lecture du fichier YAML: {e}')

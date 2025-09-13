@@ -19,6 +19,10 @@ python manage.py migrate --noinput
 echo "📁 Collecte des fichiers statiques..."
 python manage.py collectstatic --noinput
 
+# Importer les données de base
+echo "📊 Import des ligues d'arbitrage..."
+python manage.py import_ligues --force
+
 # Vérifier la configuration de production
 echo "🔧 Vérification de la configuration de production..."
 python -c "

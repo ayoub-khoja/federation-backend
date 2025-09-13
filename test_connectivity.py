@@ -112,3 +112,5 @@ if __name__ == "__main__":
     test_database_connection()
     
     print(f"\n🕐 Test terminé à: {datetime.now()}")
+
+
