@@ -2099,16 +2099,30 @@ def get_arbitre_from_user(user):
     
     # Si l'utilisateur n'est pas directement un Arbitre, essayer de le récupérer
     try:
-        if hasattr(user, 'id'):
-            print(f"🔍 DEBUG get_arbitre_from_user - Recherche Arbitre avec ID: {user.id}")
-            arbitre = Arbitre.objects.get(id=user.id)
+        if hasattr(user, 'phone_number'):
+            print(f"🔍 DEBUG get_arbitre_from_user - Recherche Arbitre avec téléphone: {user.phone_number}")
+            arbitre = Arbitre.objects.get(phone_number=user.phone_number)
             print(f"✅ DEBUG get_arbitre_from_user - Arbitre trouvé: {arbitre}")
+            return arbitre
+    except Arbitre.DoesNotExist:
+        print(f"❌ DEBUG get_arbitre_from_user - Aucun Arbitre trouvé avec téléphone: {user.phone_number}")
+        pass
+    except Exception as e:
+        print(f"❌ DEBUG get_arbitre_from_user - Erreur: {e}")
+        pass
+    
+    # Fallback: essayer par ID si le téléphone ne fonctionne pas
+    try:
+        if hasattr(user, 'id'):
+            print(f"🔍 DEBUG get_arbitre_from_user - Fallback: Recherche Arbitre avec ID: {user.id}")
+            arbitre = Arbitre.objects.get(id=user.id)
+            print(f"✅ DEBUG get_arbitre_from_user - Arbitre trouvé par ID: {arbitre}")
             return arbitre
     except Arbitre.DoesNotExist:
         print(f"❌ DEBUG get_arbitre_from_user - Aucun Arbitre trouvé avec ID: {user.id}")
         pass
     except Exception as e:
-        print(f"❌ DEBUG get_arbitre_from_user - Erreur: {e}")
+        print(f"❌ DEBUG get_arbitre_from_user - Erreur ID: {e}")
         pass
     
     print(f"❌ DEBUG get_arbitre_from_user - Aucun arbitre trouvé")
