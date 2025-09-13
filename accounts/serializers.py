@@ -634,7 +634,7 @@ class ExcuseArbitreCreateSerializer(serializers.ModelSerializer):
                 })
         
         # Vérifier qu'il n'y a pas de chevauchement avec d'autres excuses
-        arbitre = self.context['request'].user
+        arbitre = self.context.get('arbitre') or self.context['request'].user
         if date_debut and date_fin:
             overlapping_excuses = ExcuseArbitre.objects.filter(
                 arbitre=arbitre,

@@ -2208,7 +2208,7 @@ def excuses_arbitre_unified(request):
             
             serializer = ExcuseArbitreCreateSerializer(
                 data=request.data, 
-                context={'request': request}
+                context={'request': request, 'arbitre': arbitre}
             )
             
             if serializer.is_valid():
