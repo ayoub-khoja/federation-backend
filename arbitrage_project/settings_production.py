@@ -28,7 +28,8 @@ DATABASES = {
         'OPTIONS': {
             'options': '-c search_path=arbitrage_app,public'
         },
-        'CONN_MAX_AGE': 600,
+        'CONN_MAX_AGE': 0,  # Fermer les connexions immédiatement
+        'CONN_HEALTH_CHECKS': True,  # Vérifier la santé des connexions
     }
 }
 
@@ -98,6 +99,9 @@ LOGGING = {
         },
     },
 }
+
+# Ajouter le middleware pour fermer les connexions DB
+MIDDLEWARE.append('accounts.db_middleware.DatabaseConnectionMiddleware')
 
 # Message de démarrage personnalisé
 print("🚀 Serveur Django démarré en mode PRODUCTION")
