@@ -2088,6 +2088,20 @@ def mark_notification_read(request, notification_id):
 # VUES POUR LES EXCUSES D'ARBITRES
 # ============================================================================
 
+def get_arbitre_from_user(user):
+    """Récupérer l'arbitre à partir de l'utilisateur authentifié"""
+    if isinstance(user, Arbitre):
+        return user
+    
+    # Si l'utilisateur n'est pas directement un Arbitre, essayer de le récupérer
+    try:
+        if hasattr(user, 'id'):
+            return Arbitre.objects.get(id=user.id)
+    except Arbitre.DoesNotExist:
+        pass
+    
+    return None
+
 @api_view(['GET', 'POST'])
 @permission_classes([permissions.IsAuthenticated])
 def excuses_arbitre_unified(request):
@@ -2099,7 +2113,14 @@ def excuses_arbitre_unified(request):
         print(f"🔍 DEBUG GET - request.user.is_authenticated: {request.user.is_authenticated}")
         print(f"🔍 DEBUG GET - isinstance(request.user, Arbitre): {isinstance(request.user, Arbitre)}")
         
-        if not isinstance(request.user, Arbitre):
+        # Vérification plus flexible du rôle d'arbitre
+        is_arbitre = (
+            isinstance(request.user, Arbitre) or 
+            (hasattr(request.user, 'user_type') and request.user.user_type == 'arbitre') or
+            (hasattr(request.user, 'role') and request.user.role == 'arbitre')
+        )
+        
+        if not is_arbitre:
             print(f"❌ DEBUG GET - Accès refusé: utilisateur n'est pas un Arbitre")
             return Response({
                 'success': False,
@@ -2108,8 +2129,17 @@ def excuses_arbitre_unified(request):
             }, status=status.HTTP_403_FORBIDDEN)
         
         try:
+            # Récupérer l'arbitre à partir de l'utilisateur
+            arbitre = get_arbitre_from_user(request.user)
+            if not arbitre:
+                return Response({
+                    'success': False,
+                    'message': 'Arbitre non trouvé',
+                    'error_code': 'ARBITRE_NOT_FOUND'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
             # Récupérer les excuses de l'arbitre connecté
-            excuses = ExcuseArbitre.objects.filter(arbitre=request.user).order_by('-created_at')
+            excuses = ExcuseArbitre.objects.filter(arbitre=arbitre).order_by('-created_at')
             
             # Sérialiser les données
             serializer = ExcuseArbitreDetailSerializer(excuses, many=True)
@@ -2135,7 +2165,14 @@ def excuses_arbitre_unified(request):
         print(f"🔍 DEBUG POST - request.user.is_authenticated: {request.user.is_authenticated}")
         print(f"🔍 DEBUG POST - isinstance(request.user, Arbitre): {isinstance(request.user, Arbitre)}")
         
-        if not isinstance(request.user, Arbitre):
+        # Vérification plus flexible du rôle d'arbitre
+        is_arbitre = (
+            isinstance(request.user, Arbitre) or 
+            (hasattr(request.user, 'user_type') and request.user.user_type == 'arbitre') or
+            (hasattr(request.user, 'role') and request.user.role == 'arbitre')
+        )
+        
+        if not is_arbitre:
             print(f"❌ DEBUG POST - Accès refusé: utilisateur n'est pas un Arbitre")
             return Response({
                 'success': False,
@@ -2144,6 +2181,15 @@ def excuses_arbitre_unified(request):
             }, status=status.HTTP_403_FORBIDDEN)
         
         try:
+            # Récupérer l'arbitre à partir de l'utilisateur
+            arbitre = get_arbitre_from_user(request.user)
+            if not arbitre:
+                return Response({
+                    'success': False,
+                    'message': 'Arbitre non trouvé',
+                    'error_code': 'ARBITRE_NOT_FOUND'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
             serializer = ExcuseArbitreCreateSerializer(
                 data=request.data, 
                 context={'request': request}
@@ -2151,7 +2197,7 @@ def excuses_arbitre_unified(request):
             
             if serializer.is_valid():
                 # Créer l'excuse avec l'arbitre connecté
-                excuse = serializer.save(arbitre=request.user)
+                excuse = serializer.save(arbitre=arbitre)
                 
                 # Sérialiser les données complètes pour la réponse
                 excuse_data = ExcuseArbitreDetailSerializer(excuse).data
