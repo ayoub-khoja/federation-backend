@@ -2094,7 +2094,13 @@ def excuses_arbitre_unified(request):
     """Endpoint unifié pour les excuses d'arbitres (GET pour lister, POST pour créer)"""
     if request.method == 'GET':
         # Logique pour lister les excuses de l'arbitre connecté
+        print(f"🔍 DEBUG GET - request.user: {request.user}")
+        print(f"🔍 DEBUG GET - type(request.user): {type(request.user)}")
+        print(f"🔍 DEBUG GET - request.user.is_authenticated: {request.user.is_authenticated}")
+        print(f"🔍 DEBUG GET - isinstance(request.user, Arbitre): {isinstance(request.user, Arbitre)}")
+        
         if not isinstance(request.user, Arbitre):
+            print(f"❌ DEBUG GET - Accès refusé: utilisateur n'est pas un Arbitre")
             return Response({
                 'success': False,
                 'message': 'Accès non autorisé - Seuls les arbitres peuvent consulter leurs excuses',
@@ -2124,7 +2130,13 @@ def excuses_arbitre_unified(request):
             
     elif request.method == 'POST':
         # Logique pour créer une excuse d'arbitre
+        print(f"🔍 DEBUG POST - request.user: {request.user}")
+        print(f"🔍 DEBUG POST - type(request.user): {type(request.user)}")
+        print(f"🔍 DEBUG POST - request.user.is_authenticated: {request.user.is_authenticated}")
+        print(f"🔍 DEBUG POST - isinstance(request.user, Arbitre): {isinstance(request.user, Arbitre)}")
+        
         if not isinstance(request.user, Arbitre):
+            print(f"❌ DEBUG POST - Accès refusé: utilisateur n'est pas un Arbitre")
             return Response({
                 'success': False,
                 'message': 'Accès non autorisé - Seuls les arbitres peuvent créer des excuses',
