@@ -2090,16 +2090,28 @@ def mark_notification_read(request, notification_id):
 
 def get_arbitre_from_user(user):
     """Récupérer l'arbitre à partir de l'utilisateur authentifié"""
+    print(f"🔍 DEBUG get_arbitre_from_user - user: {user}")
+    print(f"🔍 DEBUG get_arbitre_from_user - type: {type(user)}")
+    
     if isinstance(user, Arbitre):
+        print(f"✅ DEBUG get_arbitre_from_user - Utilisateur est directement un Arbitre")
         return user
     
     # Si l'utilisateur n'est pas directement un Arbitre, essayer de le récupérer
     try:
         if hasattr(user, 'id'):
-            return Arbitre.objects.get(id=user.id)
+            print(f"🔍 DEBUG get_arbitre_from_user - Recherche Arbitre avec ID: {user.id}")
+            arbitre = Arbitre.objects.get(id=user.id)
+            print(f"✅ DEBUG get_arbitre_from_user - Arbitre trouvé: {arbitre}")
+            return arbitre
     except Arbitre.DoesNotExist:
+        print(f"❌ DEBUG get_arbitre_from_user - Aucun Arbitre trouvé avec ID: {user.id}")
+        pass
+    except Exception as e:
+        print(f"❌ DEBUG get_arbitre_from_user - Erreur: {e}")
         pass
     
+    print(f"❌ DEBUG get_arbitre_from_user - Aucun arbitre trouvé")
     return None
 
 @api_view(['GET', 'POST'])
@@ -2113,20 +2125,15 @@ def excuses_arbitre_unified(request):
         print(f"🔍 DEBUG GET - request.user.is_authenticated: {request.user.is_authenticated}")
         print(f"🔍 DEBUG GET - isinstance(request.user, Arbitre): {isinstance(request.user, Arbitre)}")
         
-        # Vérification plus flexible du rôle d'arbitre
-        is_arbitre = (
-            isinstance(request.user, Arbitre) or 
-            (hasattr(request.user, 'user_type') and request.user.user_type == 'arbitre') or
-            (hasattr(request.user, 'role') and request.user.role == 'arbitre')
-        )
-        
-        if not is_arbitre:
-            print(f"❌ DEBUG GET - Accès refusé: utilisateur n'est pas un Arbitre")
+        # Vérification simplifiée : accepter tous les utilisateurs authentifiés
+        # et vérifier le rôle dans la fonction get_arbitre_from_user
+        if not request.user.is_authenticated:
+            print(f"❌ DEBUG GET - Accès refusé: utilisateur non authentifié")
             return Response({
                 'success': False,
-                'message': 'Accès non autorisé - Seuls les arbitres peuvent consulter leurs excuses',
-                'error_code': 'ACCESS_DENIED'
-            }, status=status.HTTP_403_FORBIDDEN)
+                'message': 'Accès non autorisé - Authentification requise',
+                'error_code': 'AUTHENTICATION_REQUIRED'
+            }, status=status.HTTP_401_UNAUTHORIZED)
         
         try:
             # Récupérer l'arbitre à partir de l'utilisateur
@@ -2165,20 +2172,15 @@ def excuses_arbitre_unified(request):
         print(f"🔍 DEBUG POST - request.user.is_authenticated: {request.user.is_authenticated}")
         print(f"🔍 DEBUG POST - isinstance(request.user, Arbitre): {isinstance(request.user, Arbitre)}")
         
-        # Vérification plus flexible du rôle d'arbitre
-        is_arbitre = (
-            isinstance(request.user, Arbitre) or 
-            (hasattr(request.user, 'user_type') and request.user.user_type == 'arbitre') or
-            (hasattr(request.user, 'role') and request.user.role == 'arbitre')
-        )
-        
-        if not is_arbitre:
-            print(f"❌ DEBUG POST - Accès refusé: utilisateur n'est pas un Arbitre")
+        # Vérification simplifiée : accepter tous les utilisateurs authentifiés
+        # et vérifier le rôle dans la fonction get_arbitre_from_user
+        if not request.user.is_authenticated:
+            print(f"❌ DEBUG POST - Accès refusé: utilisateur non authentifié")
             return Response({
                 'success': False,
-                'message': 'Accès non autorisé - Seuls les arbitres peuvent créer des excuses',
-                'error_code': 'ACCESS_DENIED'
-            }, status=status.HTTP_403_FORBIDDEN)
+                'message': 'Accès non autorisé - Authentification requise',
+                'error_code': 'AUTHENTICATION_REQUIRED'
+            }, status=status.HTTP_401_UNAUTHORIZED)
         
         try:
             # Récupérer l'arbitre à partir de l'utilisateur
