@@ -18,3 +18,4 @@ class DatabaseConnectionMiddleware:
         connection.close()
         
         return response
+

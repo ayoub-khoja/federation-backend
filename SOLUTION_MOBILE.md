@@ -43,3 +43,4 @@ Puis testez : `http://192.168.1.100:8080`
 Le serveur Django est démarré et accessible localement. Le seul problème est le pare-feu Windows.
 
 
+

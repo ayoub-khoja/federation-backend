@@ -24,6 +24,25 @@ class LigueArbitrage(models.Model):
     def __str__(self):
         return f"{self.nom}"
 
+class GradeArbitrage(models.Model):
+    """Modèle pour les grades d'arbitrage"""
+    
+    nom = models.CharField(max_length=100, verbose_name="Nom du grade")
+    code = models.CharField(max_length=20, unique=True, verbose_name="Code")
+    description = models.TextField(blank=True, verbose_name="Description")
+    niveau = models.IntegerField(default=1, verbose_name="Niveau du grade")
+    ordre = models.IntegerField(default=0, verbose_name="Ordre d'affichage")
+    is_active = models.BooleanField(default=True, verbose_name="Grade actif")
+    date_creation = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
+    
+    class Meta:
+        verbose_name = "Grade d'arbitrage"
+        verbose_name_plural = "Grades d'arbitrage"
+        ordering = ['ordre', 'niveau', 'nom']
+    
+    def __str__(self):
+        return f"{self.nom}"
+
 # ============================================================================
 # MODÈLE ARBITRE
 # ============================================================================

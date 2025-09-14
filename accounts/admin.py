@@ -4,7 +4,7 @@ Configuration de l'interface d'administration pour les comptes
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.utils.html import format_html
-from .models import Arbitre, Commissaire, LigueArbitrage, Admin, ExcuseArbitre
+from .models import Arbitre, Commissaire, LigueArbitrage, GradeArbitrage, Admin, ExcuseArbitre
 
 @admin.register(Admin)
 class AdminUserAdmin(UserAdmin):
@@ -165,6 +165,29 @@ class LigueArbitrageAdmin(admin.ModelAdmin):
         }),
         ('Configuration', {
             'fields': ('ordre', 'is_active')
+        }),
+    )
+    
+    def get_queryset(self, request):
+        """Optimise les requêtes"""
+        return super().get_queryset(request)
+
+@admin.register(GradeArbitrage)
+class GradeArbitrageAdmin(admin.ModelAdmin):
+    """Interface d'administration pour les grades d'arbitrage"""
+    
+    list_display = ['nom', 'code', 'niveau', 'ordre', 'is_active', 'date_creation']
+    list_filter = ['is_active', 'niveau', 'date_creation']
+    search_fields = ['nom', 'code', 'description']
+    ordering = ['ordre', 'niveau', 'nom']
+    list_editable = ['is_active', 'ordre', 'niveau']
+    
+    fieldsets = (
+        ('Informations de base', {
+            'fields': ('nom', 'code', 'description')
+        }),
+        ('Configuration', {
+            'fields': ('niveau', 'ordre', 'is_active')
         }),
     )
     
